@@ -21,10 +21,10 @@ export default function Header() {
             <Image
               src="/images/logo.png"
               alt="Agropecuária e Pet Shop São Francisco"
-              width={280}
-              height={51}
+              width={323}
+              height={71}
               priority
-              className="h-10 md:h-14 w-auto"
+              className="h-12 md:h-16 w-auto"
             />
           </Link>
 
