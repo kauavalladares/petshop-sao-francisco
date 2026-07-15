@@ -40,7 +40,7 @@ export default function Home() {
           <div className="relative flex justify-center md:justify-end">
             <div className="bg-white rounded-xl2 shadow-soft p-6 md:p-8 rotate-1 max-w-sm">
               <Image
-                src="/images/mascote.png"
+                src="/images/mascote.Jpeg"
                 alt="Ilustração de um cachorro e um gato tomando banho"
                 width={268}
                 height={206}
