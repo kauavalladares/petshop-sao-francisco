@@ -19,7 +19,7 @@ export async function GET(request) {
 
   try {
     await garantirTabela();
-    const { rows } = await sql`
+    const rows = await sql`
       SELECT hora_inicio, hora_fim FROM agendamentos
       WHERE data = ${dataISO} AND status != 'cancelado'
     `;

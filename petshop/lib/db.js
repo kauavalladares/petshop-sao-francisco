@@ -1,4 +1,6 @@
-import { sql } from '@vercel/postgres';
+import { neon } from '@neondatabase/serverless';
+
+export const sql = neon(process.env.DATABASE_URL);
 
 let tabelaGarantida = false;
 
@@ -25,5 +27,3 @@ export async function garantirTabela() {
 
   tabelaGarantida = true;
 }
-
-export { sql };

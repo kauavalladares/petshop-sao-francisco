@@ -21,12 +21,13 @@ Site em Next.js com:
 O primeiro deploy provavelmente vai falhar (ou funcionar parcialmente) porque ainda
 faltam duas coisas: o banco de dados e a senha do painel. Vamos configurar agora.
 
-### 1.2. Criar o banco de dados (Vercel Postgres)
+### 1.2. Criar o banco de dados (Neon Postgres)
 1. Dentro do projeto no Vercel, vá na aba **Storage**.
-2. Clique em **Create Database → Postgres** e siga os passos (pode manter tudo no padrão).
-3. Depois de criado, clique em **Connect Project** e conecte ao seu projeto.
-   Isso preenche automaticamente as variáveis de ambiente do banco — você não
-   precisa copiar nada manualmente.
+2. Em **Marketplace Database Providers**, clique em **Neon** ("Serverless Postgres") e
+   siga os passos (pode manter tudo no padrão — plano gratuito é suficiente para começar).
+3. Depois de criado, confirme a conexão com o seu projeto quando solicitado.
+   Isso preenche automaticamente a variável `DATABASE_URL` — você não precisa
+   copiar nada manualmente.
 
 A tabela de agendamentos é criada sozinha automaticamente na primeira vez que
 alguém acessa o site ou o painel — não é necessário rodar o `schema.sql` manualmente.

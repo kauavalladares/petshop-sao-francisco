@@ -37,7 +37,7 @@ export async function POST(request) {
 
     // Revalida disponibilidade no servidor para evitar dois clientes
     // reservando o mesmo horário ao mesmo tempo.
-    const { rows } = await sql`
+    const rows = await sql`
       SELECT hora_inicio, hora_fim FROM agendamentos
       WHERE data = ${data} AND status != 'cancelado'
     `;

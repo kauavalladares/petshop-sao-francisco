@@ -10,18 +10,18 @@ export async function GET(request) {
 
     let rows;
     if (inicio && fim) {
-      ({ rows } = await sql`
+      rows = await sql`
         SELECT * FROM agendamentos
         WHERE data BETWEEN ${inicio} AND ${fim}
         ORDER BY data ASC, hora_inicio ASC
-      `);
+      `;
     } else {
-      ({ rows } = await sql`
+      rows = await sql`
         SELECT * FROM agendamentos
         WHERE data >= CURRENT_DATE - INTERVAL '1 day'
         ORDER BY data ASC, hora_inicio ASC
         LIMIT 300
-      `);
+      `;
     }
 
     return NextResponse.json({ agendamentos: rows });
