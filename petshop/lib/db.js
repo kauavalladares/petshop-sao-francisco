@@ -25,5 +25,12 @@ export async function garantirTabela() {
     );
   `;
 
+  // Migração: distingue agendamentos feitos pelo cliente online dos
+  // lançados manualmente pelo administrador (cliente que chega sem marcar).
+  await sql`
+    ALTER TABLE agendamentos
+    ADD COLUMN IF NOT EXISTS origem VARCHAR(20) NOT NULL DEFAULT 'online'
+  `;
+
   tabelaGarantida = true;
 }
