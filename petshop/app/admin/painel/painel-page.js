@@ -108,11 +108,11 @@ export default function PainelAdminPage() {
                     <p className="text-sm text-ink/50">{a.cliente_telefone}</p>
                   </div>
 
-                  <span className={`text-xs font-display px-3 py-1 rounded-full shrink-0 ${STATUS_LABEL[a.status]?.cor || ''}`}>
+                  <span className={`self-start md:self-auto text-xs font-display px-3 py-1 rounded-full shrink-0 ${STATUS_LABEL[a.status]?.cor || ''}`}>
                     {STATUS_LABEL[a.status]?.texto || a.status}
                   </span>
 
-                  <div className="flex gap-2 shrink-0">
+                  <div className="flex gap-2 shrink-0 self-start md:self-auto">
                     {a.status !== 'concluido' && (
                       <button
                         type="button"

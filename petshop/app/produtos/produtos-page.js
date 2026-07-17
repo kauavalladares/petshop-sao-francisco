@@ -46,7 +46,7 @@ export default function ProdutosPage() {
         </div>
         <a
           href="tel:5554996541615"
-          className="inline-flex items-center gap-2 bg-clay-500 hover:bg-clay-600 text-white font-display text-lg px-7 py-3.5 rounded-full shadow-soft transition-colors focus-ring whitespace-nowrap"
+          className="inline-flex items-center justify-center gap-2 bg-clay-500 hover:bg-clay-600 text-white font-display text-lg px-7 py-3.5 rounded-full shadow-soft transition-colors focus-ring w-full sm:w-auto"
         >
           (54) 99654-1615
         </a>
