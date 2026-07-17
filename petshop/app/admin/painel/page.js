@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { formatarPreco } from '@/lib/servicos';
 
 const STATUS_LABEL = {
   confirmado: { texto: 'Confirmado', cor: 'bg-teal-800 text-white' },
@@ -9,11 +10,41 @@ const STATUS_LABEL = {
   cancelado: { texto: 'Cancelado', cor: 'bg-cream-line text-ink/50 line-through' },
 };
 
+function toISO(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function dataChave(a) {
+  return typeof a.data === 'string' ? a.data.slice(0, 10) : toISO(new Date(a.data));
+}
+
+// Retorna a segunda e a sexta-feira da semana da data informada
+function semanaAtual(date) {
+  const dia = date.getDay(); // 0 = domingo ... 6 = sábado
+  const diffSegunda = dia === 0 ? -6 : 1 - dia;
+  const segunda = new Date(date);
+  segunda.setDate(date.getDate() + diffSegunda);
+  const sexta = new Date(segunda);
+  sexta.setDate(segunda.getDate() + 4);
+  return { inicio: toISO(segunda), fim: toISO(sexta) };
+}
+
 export default function PainelAdminPage() {
   const [agendamentos, setAgendamentos] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
+
+  const [semana, setSemana] = useState([]);
+  const [carregandoSemana, setCarregandoSemana] = useState(true);
+
   const router = useRouter();
+
+  const hoje = useMemo(() => new Date(), []);
+  const hojeISO = useMemo(() => toISO(hoje), [hoje]);
+  const { inicio: inicioSemana, fim: fimSemana } = useMemo(() => semanaAtual(hoje), [hoje]);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -37,12 +68,28 @@ export default function PainelAdminPage() {
     }
   }, [router]);
 
+  const carregarSemana = useCallback(async () => {
+    setCarregandoSemana(true);
+    try {
+      const resp = await fetch(`/api/admin/agendamentos?inicio=${inicioSemana}&fim=${fimSemana}`);
+      if (resp.status === 401) return;
+      const data = await resp.json();
+      if (resp.ok) setSemana(data.agendamentos || []);
+    } catch {
+      // silencioso: o resumo é um extra, não trava a página se falhar
+    } finally {
+      setCarregandoSemana(false);
+    }
+  }, [inicioSemana, fimSemana]);
+
   useEffect(() => {
     carregar();
-  }, [carregar]);
+    carregarSemana();
+  }, [carregar, carregarSemana]);
 
   async function atualizarStatus(id, status) {
     setAgendamentos((atual) => atual.map((a) => (a.id === id ? { ...a, status } : a)));
+    setSemana((atual) => atual.map((a) => (a.id === id ? { ...a, status } : a)));
     try {
       await fetch('/api/admin/agendamentos', {
         method: 'PATCH',
@@ -51,6 +98,7 @@ export default function PainelAdminPage() {
       });
     } catch {
       carregar();
+      carregarSemana();
     }
   }
 
@@ -60,6 +108,11 @@ export default function PainelAdminPage() {
   }
 
   const agrupados = agrupar(agendamentos);
+
+  const semanaValida = semana.filter((a) => a.status !== 'cancelado');
+  const hojeValidos = semanaValida.filter((a) => dataChave(a) === hojeISO);
+  const totalHoje = hojeValidos.reduce((soma, a) => soma + Number(a.preco), 0);
+  const totalSemana = semanaValida.reduce((soma, a) => soma + Number(a.preco), 0);
 
   return (
     <div className="mx-auto max-w-5xl px-4 md:px-6 py-12">
@@ -79,6 +132,41 @@ export default function PainelAdminPage() {
         </button>
       </div>
 
+      {/* RESUMO DO DIA E DA SEMANA */}
+      <div className="grid sm:grid-cols-2 gap-4 mb-10">
+        <div className="bg-teal-900 text-cream-soft rounded-2xl p-5 md:p-6">
+          <p className="font-display text-sm uppercase tracking-wide text-cream-soft/70 mb-1">
+            Hoje
+          </p>
+          {carregandoSemana ? (
+            <p className="text-cream-soft/70 text-sm">Carregando…</p>
+          ) : (
+            <>
+              <p className="font-display text-3xl">{formatarPreco(totalHoje)}</p>
+              <p className="text-sm text-cream-soft/70 mt-1">
+                {hojeValidos.length} {hojeValidos.length === 1 ? 'agendamento' : 'agendamentos'}
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-soft p-5 md:p-6">
+          <p className="font-display text-sm uppercase tracking-wide text-ink/50 mb-1">
+            Esta semana (seg. a sex.)
+          </p>
+          {carregandoSemana ? (
+            <p className="text-ink/50 text-sm">Carregando…</p>
+          ) : (
+            <>
+              <p className="font-display text-3xl text-clay-500">{formatarPreco(totalSemana)}</p>
+              <p className="text-sm text-ink/50 mt-1">
+                {semanaValida.length} {semanaValida.length === 1 ? 'agendamento' : 'agendamentos'}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+
       {carregando && <p className="text-ink/60">Carregando…</p>}
       {erro && <p className="text-clay-600">{erro}</p>}
 
@@ -89,7 +177,22 @@ export default function PainelAdminPage() {
       <div className="grid gap-8">
         {Object.entries(agrupados).map(([data, lista]) => (
           <div key={data}>
-            <p className="font-display text-lg text-teal-900 mb-3">{formatarDataLonga(data)}</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-display text-lg text-teal-900">
+                {formatarDataLonga(data)}
+                {data === hojeISO && (
+                  <span className="ml-2 align-middle text-xs font-display bg-clay-100 text-clay-600 px-2.5 py-1 rounded-full">
+                    Hoje
+                  </span>
+                )}
+              </p>
+              <p className="text-sm text-ink/50">
+                {formatarPreco(
+                  lista.filter((a) => a.status !== 'cancelado').reduce((s, a) => s + Number(a.preco), 0)
+                )}{' '}
+                no dia
+              </p>
+            </div>
             <div className="grid gap-3">
               {lista.map((a) => (
                 <div
@@ -101,7 +204,12 @@ export default function PainelAdminPage() {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <p className="font-display text-teal-900">{a.servico_nome}</p>
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <p className="font-display text-teal-900">{a.servico_nome}</p>
+                      <span className="font-display text-sm text-clay-500">
+                        {formatarPreco(Number(a.preco))}
+                      </span>
+                    </div>
                     <p className="text-sm text-ink/70">
                       Pet: {a.pet_nome} · Tutor: {a.cliente_nome}
                     </p>
@@ -144,7 +252,7 @@ export default function PainelAdminPage() {
 
 function agrupar(agendamentos) {
   return agendamentos.reduce((acc, a) => {
-    const chave = typeof a.data === 'string' ? a.data.slice(0, 10) : a.data;
+    const chave = dataChave(a);
     if (!acc[chave]) acc[chave] = [];
     acc[chave].push(a);
     return acc;
