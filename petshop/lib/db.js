@@ -32,5 +32,33 @@ export async function garantirTabela() {
     ADD COLUMN IF NOT EXISTS origem VARCHAR(20) NOT NULL DEFAULT 'online'
   `;
 
+  // Pacotes: cliente contrata N sessões de um serviço por um valor fechado
+  // (ex: 4 banhos por R$140). O pagamento pode acontecer a qualquer momento
+  // (início, fim, ou parcial) — por isso guardamos separadamente SE já foi
+  // pago e EM QUE DIA, para o relatório contar o valor no dia certo.
+  await sql`
+    CREATE TABLE IF NOT EXISTS pacotes (
+      id SERIAL PRIMARY KEY,
+      cliente_nome VARCHAR(120) NOT NULL,
+      cliente_telefone VARCHAR(30),
+      servico_nome VARCHAR(120) NOT NULL,
+      quantidade_total INTEGER NOT NULL,
+      quantidade_usada INTEGER NOT NULL DEFAULT 0,
+      valor_total NUMERIC(10,2) NOT NULL,
+      pago BOOLEAN NOT NULL DEFAULT false,
+      data_pagamento DATE,
+      status VARCHAR(20) NOT NULL DEFAULT 'ativo',
+      data_venda DATE NOT NULL DEFAULT CURRENT_DATE,
+      criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `;
+
+  // Vincula uma sessão de agendamento a um pacote (quando o cliente usa um
+  // dos banhos/tosas já contratados em vez de pagar avulso).
+  await sql`
+    ALTER TABLE agendamentos
+    ADD COLUMN IF NOT EXISTS pacote_id INTEGER REFERENCES pacotes(id)
+  `;
+
   tabelaGarantida = true;
 }

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { formatarPreco } from '@/lib/servicos';
 import AgendamentoModal from '@/components/admin/AgendamentoModal';
 import AgendaSemanal from '@/components/admin/AgendaSemanal';
+import RelatorioMensal from '@/components/admin/RelatorioMensal';
+import PacotesTab from '@/components/admin/PacotesTab';
 
 const STATUS_LABEL = {
   confirmado: { texto: 'Confirmado', cor: 'bg-teal-800 text-white' },
@@ -38,53 +40,93 @@ function sextaFeiraDe(segunda) {
   return sex;
 }
 
+function dataPagamentoChave(p) {
+  if (!p.data_pagamento) return null;
+  return p.data_pagamento.slice ? p.data_pagamento.slice(0, 10) : p.data_pagamento;
+}
+
+// Calcula o intervalo de datas correspondente ao filtro de período escolhido.
+// Retorna null para "próximos" (usa o comportamento padrão da API) e para
+// "personalizado" enquanto as duas datas não foram preenchidas.
+function calcularRangeFiltro(periodo, personalizado) {
+  const hoje = new Date();
+  if (periodo === 'hoje') {
+    const iso = toISO(hoje);
+    return { inicio: iso, fim: iso };
+  }
+  if (periodo === 'semana') {
+    const seg = segundaFeiraDe(hoje);
+    return { inicio: toISO(seg), fim: toISO(sextaFeiraDe(seg)) };
+  }
+  if (periodo === 'mes') {
+    return {
+      inicio: toISO(new Date(hoje.getFullYear(), hoje.getMonth(), 1)),
+      fim: toISO(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)),
+    };
+  }
+  if (periodo === 'personalizado') {
+    if (personalizado.inicio && personalizado.fim) return personalizado;
+    return undefined; // aguardando o usuário preencher as duas datas
+  }
+  return null; // 'proximos'
+}
+
 export default function PainelAdminPage() {
   const router = useRouter();
 
-  const [visualizacao, setVisualizacao] = useState('lista'); // 'lista' | 'agenda'
+  const [visualizacao, setVisualizacao] = useState('lista'); // 'lista' | 'agenda' | 'relatorio' | 'pacotes'
 
-  // --- Lista (próximos agendamentos a partir de hoje) ---
+  // --- Lista (com filtros de período e status) ---
   const [agendamentos, setAgendamentos] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
+  const [periodoFiltro, setPeriodoFiltro] = useState('proximos');
+  const [filtroDataInicio, setFiltroDataInicio] = useState('');
+  const [filtroDataFim, setFiltroDataFim] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState('todos');
 
-  // --- Resumo do dia / semana atual ---
+  // --- Resumo do dia / semana atual (cards do topo) ---
   const [semana, setSemana] = useState([]);
   const [carregandoSemana, setCarregandoSemana] = useState(true);
+  const [pacotesResumo, setPacotesResumo] = useState([]);
 
   // --- Agenda semanal navegável ---
   const [segundaAgenda, setSegundaAgenda] = useState(() => segundaFeiraDe(new Date()));
   const [agendaSemana, setAgendaSemana] = useState([]);
   const [carregandoAgenda, setCarregandoAgenda] = useState(true);
 
-  // --- Modal de criar/editar ---
+  // --- Modal de criar/editar agendamento ---
   const [modal, setModal] = useState(null); // { agendamento?, dataPadrao?, horaPadrao? } | null
 
   const hoje = useMemo(() => new Date(), []);
   const hojeISO = useMemo(() => toISO(hoje), [hoje]);
   const segundaAtual = useMemo(() => segundaFeiraDe(hoje), [hoje]);
 
-  const carregar = useCallback(async () => {
-    setCarregando(true);
-    setErro(null);
-    try {
-      const resp = await fetch('/api/admin/agendamentos');
-      if (resp.status === 401) {
-        router.push('/admin');
-        return;
+  const carregar = useCallback(
+    async (range) => {
+      setCarregando(true);
+      setErro(null);
+      try {
+        const query = range?.inicio && range?.fim ? `?inicio=${range.inicio}&fim=${range.fim}` : '';
+        const resp = await fetch(`/api/admin/agendamentos${query}`);
+        if (resp.status === 401) {
+          router.push('/admin');
+          return;
+        }
+        const data = await resp.json();
+        if (!resp.ok) {
+          setErro(data.erro || 'Não foi possível carregar os agendamentos.');
+          return;
+        }
+        setAgendamentos(data.agendamentos || []);
+      } catch {
+        setErro('Não foi possível carregar os agendamentos.');
+      } finally {
+        setCarregando(false);
       }
-      const data = await resp.json();
-      if (!resp.ok) {
-        setErro(data.erro || 'Não foi possível carregar os agendamentos.');
-        return;
-      }
-      setAgendamentos(data.agendamentos || []);
-    } catch {
-      setErro('Não foi possível carregar os agendamentos.');
-    } finally {
-      setCarregando(false);
-    }
-  }, [router]);
+    },
+    [router]
+  );
 
   const carregarSemanaResumo = useCallback(async () => {
     setCarregandoSemana(true);
@@ -102,6 +144,17 @@ export default function PainelAdminPage() {
     }
   }, [segundaAtual]);
 
+  const carregarPacotesResumo = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/admin/pacotes');
+      if (resp.status === 401) return;
+      const data = await resp.json();
+      if (resp.ok) setPacotesResumo(data.pacotes || []);
+    } catch {
+      // idem, é um extra
+    }
+  }, []);
+
   const carregarAgenda = useCallback(async (segunda) => {
     setCarregandoAgenda(true);
     try {
@@ -118,18 +171,27 @@ export default function PainelAdminPage() {
     }
   }, []);
 
+  // Refaz a busca da lista sempre que o filtro de período muda
   useEffect(() => {
-    carregar();
+    const range = calcularRangeFiltro(periodoFiltro, { inicio: filtroDataInicio, fim: filtroDataFim });
+    if (range === undefined) return; // personalizado aguardando as duas datas
+    carregar(range);
+  }, [periodoFiltro, filtroDataInicio, filtroDataFim, carregar]);
+
+  useEffect(() => {
     carregarSemanaResumo();
-  }, [carregar, carregarSemanaResumo]);
+    carregarPacotesResumo();
+  }, [carregarSemanaResumo, carregarPacotesResumo]);
 
   useEffect(() => {
     carregarAgenda(segundaAgenda);
   }, [segundaAgenda, carregarAgenda]);
 
   function recarregarTudo() {
-    carregar();
+    const range = calcularRangeFiltro(periodoFiltro, { inicio: filtroDataInicio, fim: filtroDataFim });
+    if (range !== undefined) carregar(range);
     carregarSemanaResumo();
+    carregarPacotesResumo();
     carregarAgenda(segundaAgenda);
   }
 
@@ -153,12 +215,25 @@ export default function PainelAdminPage() {
     router.push('/admin');
   }
 
-  const agrupados = agrupar(agendamentos);
+  const agendamentosFiltrados =
+    filtroStatus === 'todos' ? agendamentos : agendamentos.filter((a) => a.status === filtroStatus);
+  const agrupados = agrupar(agendamentosFiltrados);
 
   const semanaValida = semana.filter((a) => a.status !== 'cancelado');
   const hojeValidos = semanaValida.filter((a) => dataChave(a) === hojeISO);
-  const totalHoje = hojeValidos.reduce((soma, a) => soma + Number(a.preco), 0);
-  const totalSemana = semanaValida.reduce((soma, a) => soma + Number(a.preco), 0);
+
+  const fimSemanaISO = toISO(sextaFeiraDe(segundaAtual));
+  const inicioSemanaISO = toISO(segundaAtual);
+  const pacotesPagosHoje = pacotesResumo.filter((p) => p.pago && dataPagamentoChave(p) === hojeISO);
+  const pacotesPagosSemana = pacotesResumo.filter((p) => {
+    const d = dataPagamentoChave(p);
+    return p.pago && d && d >= inicioSemanaISO && d <= fimSemanaISO;
+  });
+  const receitaPacotesHoje = pacotesPagosHoje.reduce((s, p) => s + Number(p.valor_total), 0);
+  const receitaPacotesSemana = pacotesPagosSemana.reduce((s, p) => s + Number(p.valor_total), 0);
+
+  const totalHoje = hojeValidos.reduce((soma, a) => soma + Number(a.preco), 0) + receitaPacotesHoje;
+  const totalSemana = semanaValida.reduce((soma, a) => soma + Number(a.preco), 0) + receitaPacotesSemana;
 
   return (
     <div className="mx-auto max-w-5xl px-4 md:px-6 py-12">
@@ -198,6 +273,7 @@ export default function PainelAdminPage() {
               <p className="font-display text-3xl">{formatarPreco(totalHoje)}</p>
               <p className="text-sm text-cream-soft/70 mt-1">
                 {hojeValidos.length} {hojeValidos.length === 1 ? 'agendamento' : 'agendamentos'}
+                {receitaPacotesHoje > 0 && <> · inclui {formatarPreco(receitaPacotesHoje)} de pacotes</>}
               </p>
             </>
           )}
@@ -214,6 +290,7 @@ export default function PainelAdminPage() {
               <p className="font-display text-3xl text-clay-500">{formatarPreco(totalSemana)}</p>
               <p className="text-sm text-ink/50 mt-1">
                 {semanaValida.length} {semanaValida.length === 1 ? 'agendamento' : 'agendamentos'}
+                {receitaPacotesSemana > 0 && <> · inclui {formatarPreco(receitaPacotesSemana)} de pacotes</>}
               </p>
             </>
           )}
@@ -221,25 +298,26 @@ export default function PainelAdminPage() {
       </div>
 
       {/* ABAS */}
-      <div className="flex gap-2 mb-6 border-b border-cream-line">
-        <button
-          type="button"
-          onClick={() => setVisualizacao('lista')}
-          className={`font-display px-4 py-2.5 border-b-2 -mb-px transition-colors focus-ring ${
-            visualizacao === 'lista' ? 'border-teal-800 text-teal-900' : 'border-transparent text-ink/50 hover:text-ink/80'
-          }`}
-        >
-          Lista
-        </button>
-        <button
-          type="button"
-          onClick={() => setVisualizacao('agenda')}
-          className={`font-display px-4 py-2.5 border-b-2 -mb-px transition-colors focus-ring ${
-            visualizacao === 'agenda' ? 'border-teal-800 text-teal-900' : 'border-transparent text-ink/50 hover:text-ink/80'
-          }`}
-        >
-          Agenda
-        </button>
+      <div className="flex gap-2 mb-6 border-b border-cream-line overflow-x-auto">
+        {[
+          { chave: 'lista', label: 'Lista' },
+          { chave: 'agenda', label: 'Agenda' },
+          { chave: 'relatorio', label: 'Relatório' },
+          { chave: 'pacotes', label: 'Pacotes' },
+        ].map((aba) => (
+          <button
+            key={aba.chave}
+            type="button"
+            onClick={() => setVisualizacao(aba.chave)}
+            className={`font-display px-4 py-2.5 border-b-2 -mb-px transition-colors focus-ring whitespace-nowrap shrink-0 ${
+              visualizacao === aba.chave
+                ? 'border-teal-800 text-teal-900'
+                : 'border-transparent text-ink/50 hover:text-ink/80'
+            }`}
+          >
+            {aba.label}
+          </button>
+        ))}
       </div>
 
       {visualizacao === 'agenda' && (
@@ -260,13 +338,72 @@ export default function PainelAdminPage() {
         />
       )}
 
+      {visualizacao === 'relatorio' && <RelatorioMensal />}
+
+      {visualizacao === 'pacotes' && <PacotesTab onAlterado={recarregarTudo} />}
+
       {visualizacao === 'lista' && (
         <>
+          {/* FILTROS */}
+          <div className="flex flex-wrap items-end gap-3 mb-6">
+            <label className="block">
+              <span className="text-xs font-display text-teal-900 uppercase tracking-wide">Período</span>
+              <select
+                value={periodoFiltro}
+                onChange={(e) => setPeriodoFiltro(e.target.value)}
+                className="mt-1 rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-3 py-2 bg-white focus-ring text-sm"
+              >
+                <option value="proximos">Próximos agendamentos</option>
+                <option value="hoje">Hoje</option>
+                <option value="semana">Esta semana</option>
+                <option value="mes">Este mês</option>
+                <option value="personalizado">Período personalizado</option>
+              </select>
+            </label>
+
+            {periodoFiltro === 'personalizado' && (
+              <>
+                <label className="block">
+                  <span className="text-xs font-display text-teal-900 uppercase tracking-wide">De</span>
+                  <input
+                    type="date"
+                    value={filtroDataInicio}
+                    onChange={(e) => setFiltroDataInicio(e.target.value)}
+                    className="mt-1 rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-3 py-2 bg-white focus-ring text-sm"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-display text-teal-900 uppercase tracking-wide">Até</span>
+                  <input
+                    type="date"
+                    value={filtroDataFim}
+                    onChange={(e) => setFiltroDataFim(e.target.value)}
+                    className="mt-1 rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-3 py-2 bg-white focus-ring text-sm"
+                  />
+                </label>
+              </>
+            )}
+
+            <label className="block">
+              <span className="text-xs font-display text-teal-900 uppercase tracking-wide">Status</span>
+              <select
+                value={filtroStatus}
+                onChange={(e) => setFiltroStatus(e.target.value)}
+                className="mt-1 rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-3 py-2 bg-white focus-ring text-sm"
+              >
+                <option value="todos">Todos</option>
+                <option value="confirmado">Confirmado</option>
+                <option value="concluido">Concluído</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </label>
+          </div>
+
           {carregando && <p className="text-ink/60">Carregando…</p>}
           {erro && <p className="text-clay-600">{erro}</p>}
 
-          {!carregando && !erro && agendamentos.length === 0 && (
-            <p className="text-ink/60">Nenhum agendamento encontrado a partir de hoje.</p>
+          {!carregando && !erro && agendamentosFiltrados.length === 0 && (
+            <p className="text-ink/60">Nenhum agendamento encontrado para esse filtro.</p>
           )}
 
           <div className="grid gap-8">
@@ -307,6 +444,11 @@ export default function PainelAdminPage() {
                           {a.origem === 'manual' && (
                             <span className="text-[10px] font-display text-ink/40 border border-cream-line px-1.5 py-0.5 rounded-full">
                               balcão
+                            </span>
+                          )}
+                          {a.origem === 'pacote' && (
+                            <span className="text-[10px] font-display text-teal-800 border border-teal-800/30 bg-clay-100 px-1.5 py-0.5 rounded-full">
+                              pacote
                             </span>
                           )}
                         </div>

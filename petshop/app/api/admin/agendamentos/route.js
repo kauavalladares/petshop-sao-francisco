@@ -6,6 +6,17 @@ function toMinutos(hhmm) {
   return h * 60 + m;
 }
 
+// Ajusta quantas sessões de um pacote já foram usadas (delta +1 ou -1) e
+// mantém o status do pacote em dia ('ativo' <-> 'finalizado').
+async function ajustarUsoPacote(pacoteId, delta) {
+  const rows = await sql`SELECT quantidade_total, quantidade_usada, status FROM pacotes WHERE id = ${pacoteId}`;
+  const pacote = rows[0];
+  if (!pacote || pacote.status === 'cancelado') return;
+  const novaUsada = Math.max(0, pacote.quantidade_usada + delta);
+  const novoStatus = novaUsada >= pacote.quantidade_total ? 'finalizado' : 'ativo';
+  await sql`UPDATE pacotes SET quantidade_usada = ${novaUsada}, status = ${novoStatus} WHERE id = ${pacoteId}`;
+}
+
 export async function GET(request) {
   try {
     await garantirTabela();
@@ -36,7 +47,8 @@ export async function GET(request) {
   }
 }
 
-// Cadastro manual: cliente que chega na loja sem ter agendado pelo site.
+// Cadastro manual: cliente que chega na loja sem ter agendado pelo site,
+// ou usando uma sessão de um pacote já contratado (pacoteId).
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -50,28 +62,37 @@ export async function POST(request) {
       clienteTelefone,
       petNome,
       status,
+      pacoteId,
     } = body || {};
 
-    if (!servicoNome?.trim() || !data || !horaInicio || !horaFim || !petNome?.trim() || preco === undefined || preco === null) {
-      return NextResponse.json({ erro: 'Preencha serviço, valor, data, horário e o nome do pet.' }, { status: 400 });
+    if (!servicoNome?.trim() || !data || !horaInicio || !horaFim || !petNome?.trim()) {
+      return NextResponse.json({ erro: 'Preencha serviço, data, horário e o nome do pet.' }, { status: 400 });
     }
 
-    const precoNumero = Number(preco);
-    if (Number.isNaN(precoNumero) || precoNumero < 0) {
-      return NextResponse.json({ erro: 'Valor inválido.' }, { status: 400 });
+    let precoNumero = 0;
+    if (!pacoteId) {
+      precoNumero = Number(preco);
+      if (preco === undefined || preco === null || Number.isNaN(precoNumero) || precoNumero < 0) {
+        return NextResponse.json({ erro: 'Valor inválido.' }, { status: 400 });
+      }
     }
 
     const duracaoMinutos = Math.max(1, toMinutos(horaFim) - toMinutos(horaInicio));
+    const origem = pacoteId ? 'pacote' : 'manual';
 
     await garantirTabela();
     await sql`
       INSERT INTO agendamentos
-        (servico_id, servico_nome, data, hora_inicio, hora_fim, duracao_minutos, preco, cliente_nome, cliente_telefone, pet_nome, status, origem)
+        (servico_id, servico_nome, data, hora_inicio, hora_fim, duracao_minutos, preco, cliente_nome, cliente_telefone, pet_nome, status, origem, pacote_id)
       VALUES
         ('manual', ${servicoNome.trim()}, ${data}, ${horaInicio}, ${horaFim}, ${duracaoMinutos}, ${precoNumero},
          ${clienteNome?.trim() || 'Cliente balcão'}, ${clienteTelefone?.trim() || '-'}, ${petNome.trim()},
-         ${status || 'concluido'}, 'manual')
+         ${status || 'concluido'}, ${origem}, ${pacoteId || null})
     `;
+
+    if (pacoteId) {
+      await ajustarUsoPacote(pacoteId, 1);
+    }
 
     return NextResponse.json({ sucesso: true });
   } catch (erro) {
@@ -127,6 +148,9 @@ export async function PATCH(request) {
 
       const duracaoMinutos = Math.max(1, toMinutos(horaFim) - toMinutos(horaInicio));
 
+      const atuais = await sql`SELECT status, pacote_id FROM agendamentos WHERE id = ${id}`;
+      const atual = atuais[0];
+
       await sql`
         UPDATE agendamentos SET
           servico_nome = ${servicoNome.trim()},
@@ -142,13 +166,32 @@ export async function PATCH(request) {
         WHERE id = ${id}
       `;
 
+      if (atual?.pacote_id) {
+        const eraCancelado = atual.status === 'cancelado';
+        const vaiCancelar = statusCampo === 'cancelado';
+        if (!eraCancelado && vaiCancelar) await ajustarUsoPacote(atual.pacote_id, -1);
+        if (eraCancelado && !vaiCancelar) await ajustarUsoPacote(atual.pacote_id, 1);
+      }
+
       return NextResponse.json({ sucesso: true });
     }
 
     if (!status || !['confirmado', 'concluido', 'cancelado'].includes(status)) {
       return NextResponse.json({ erro: 'Dados inválidos.' }, { status: 400 });
     }
+
+    const atuais = await sql`SELECT status, pacote_id FROM agendamentos WHERE id = ${id}`;
+    const atual = atuais[0];
+
     await sql`UPDATE agendamentos SET status = ${status} WHERE id = ${id}`;
+
+    if (atual?.pacote_id) {
+      const eraCancelado = atual.status === 'cancelado';
+      const vaiCancelar = status === 'cancelado';
+      if (!eraCancelado && vaiCancelar) await ajustarUsoPacote(atual.pacote_id, -1);
+      if (eraCancelado && !vaiCancelar) await ajustarUsoPacote(atual.pacote_id, 1);
+    }
+
     return NextResponse.json({ sucesso: true });
   } catch (erro) {
     console.error(erro);

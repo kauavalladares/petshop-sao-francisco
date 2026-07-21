@@ -27,6 +27,7 @@ function estadoInicial(agendamento, dataPadrao, horaPadrao) {
       clienteTelefone: agendamento.cliente_telefone === '-' ? '' : agendamento.cliente_telefone,
       petNome: agendamento.pet_nome,
       status: agendamento.status,
+      pacoteId: null,
     };
   }
   return {
@@ -40,14 +41,17 @@ function estadoInicial(agendamento, dataPadrao, horaPadrao) {
     clienteTelefone: '',
     petNome: '',
     status: 'confirmado',
+    pacoteId: null,
   };
 }
 
 export default function AgendamentoModal({ agendamento, dataPadrao, horaPadrao, onFechar, onSalvo }) {
   const modoEdicao = Boolean(agendamento);
+  const vinculadoAPacote = modoEdicao && Boolean(agendamento.pacote_id);
   const [form, setForm] = useState(() => estadoInicial(agendamento, dataPadrao, horaPadrao));
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState(null);
+  const [pacotesAtivos, setPacotesAtivos] = useState([]);
 
   useEffect(() => {
     function onEsc(e) {
@@ -56,6 +60,14 @@ export default function AgendamentoModal({ agendamento, dataPadrao, horaPadrao, 
     document.addEventListener('keydown', onEsc);
     return () => document.removeEventListener('keydown', onEsc);
   }, [onFechar]);
+
+  useEffect(() => {
+    if (modoEdicao) return;
+    fetch('/api/admin/pacotes?status=ativo')
+      .then((r) => r.json())
+      .then((data) => setPacotesAtivos(data.pacotes || []))
+      .catch(() => {});
+  }, [modoEdicao]);
 
   function alterarCampo(campo, valor) {
     setForm((f) => ({ ...f, [campo]: valor }));
@@ -73,6 +85,25 @@ export default function AgendamentoModal({ agendamento, dataPadrao, horaPadrao, 
       servicoNome: servico.nome,
       preco: String(servico.preco),
       horaFim: toHHMM(toMinutos(f.horaInicio || '09:00') + servico.duracaoMin),
+    }));
+  }
+
+  function selecionarPacote(pacoteIdStr) {
+    if (!pacoteIdStr) {
+      const servico = SERVICOS.find((s) => s.id === form.servicoId);
+      setForm((f) => ({ ...f, pacoteId: null, preco: servico ? String(servico.preco) : f.preco }));
+      return;
+    }
+    const pacote = pacotesAtivos.find((p) => String(p.id) === pacoteIdStr);
+    if (!pacote) return;
+    setForm((f) => ({
+      ...f,
+      pacoteId: pacote.id,
+      servicoNome: pacote.servico_nome,
+      servicoId: SERVICOS.find((s) => s.nome === pacote.servico_nome)?.id || 'outro',
+      preco: '0',
+      clienteNome: f.clienteNome || pacote.cliente_nome,
+      clienteTelefone: f.clienteTelefone || pacote.cliente_telefone || '',
     }));
   }
 
@@ -118,7 +149,7 @@ export default function AgendamentoModal({ agendamento, dataPadrao, horaPadrao, 
         : await fetch('/api/admin/agendamentos', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payloadCampos),
+            body: JSON.stringify({ ...payloadCampos, pacoteId: form.pacoteId || undefined }),
           });
 
       const data = await resp.json();
@@ -163,13 +194,40 @@ export default function AgendamentoModal({ agendamento, dataPadrao, horaPadrao, 
           </p>
         )}
 
+        {vinculadoAPacote && (
+          <p className="text-sm text-teal-800 bg-clay-100 rounded-xl px-4 py-2.5 mb-5">
+            Esta sessão faz parte de um pacote — o valor fica travado em R$0,00 aqui.
+          </p>
+        )}
+
         <form onSubmit={salvar} className="grid gap-4">
+          {!modoEdicao && pacotesAtivos.length > 0 && (
+            <label className="block">
+              <span className="text-sm font-display text-teal-900">
+                Usar sessão de um pacote (opcional)
+              </span>
+              <select
+                value={form.pacoteId || ''}
+                onChange={(e) => selecionarPacote(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
+              >
+                <option value="">— Avulso (cobrar normalmente) —</option>
+                {pacotesAtivos.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.cliente_nome} · {p.servico_nome} ({p.quantidade_usada}/{p.quantidade_total} usadas)
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
           <label className="block">
             <span className="text-sm font-display text-teal-900">Serviço</span>
             <select
               value={form.servicoId}
               onChange={(e) => alterarServico(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
+              disabled={Boolean(form.pacoteId) || vinculadoAPacote}
+              className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring disabled:opacity-60"
             >
               {SERVICOS.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -190,15 +248,21 @@ export default function AgendamentoModal({ agendamento, dataPadrao, horaPadrao, 
           )}
 
           <div className="grid grid-cols-2 gap-4">
-            <Campo
-              label="Valor (R$)"
-              value={form.preco}
-              onChange={(v) => alterarCampo('preco', v)}
-              type="number"
-              step="0.01"
-              min="0"
-              required
-            />
+            <div>
+              <Campo
+                label="Valor (R$)"
+                value={form.preco}
+                onChange={(v) => alterarCampo('preco', v)}
+                type="number"
+                step="0.01"
+                min="0"
+                required
+                disabled={Boolean(form.pacoteId) || vinculadoAPacote}
+              />
+              {(form.pacoteId || vinculadoAPacote) && (
+                <p className="text-xs text-ink/50 mt-1">Incluso no pacote</p>
+              )}
+            </div>
             <label className="block">
               <span className="text-sm font-display text-teal-900">Status</span>
               <select
@@ -287,7 +351,7 @@ export default function AgendamentoModal({ agendamento, dataPadrao, horaPadrao, 
   );
 }
 
-function Campo({ label, value, onChange, type = 'text', required, step, min }) {
+function Campo({ label, value, onChange, type = 'text', required, step, min, disabled }) {
   return (
     <label className="block">
       <span className="text-sm font-display text-teal-900">{label}</span>
@@ -297,9 +361,11 @@ function Campo({ label, value, onChange, type = 'text', required, step, min }) {
         step={step}
         min={min}
         required={required}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 text-ink bg-cream-soft focus-ring"
+        className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 text-ink bg-cream-soft focus-ring disabled:opacity-60"
       />
     </label>
   );
 }
+

@@ -15,5 +15,5 @@ export function middleware(request) {
 }
 
 export const config = {
-  matcher: ['/admin/painel/:path*', '/api/admin/agendamentos/:path*'],
+  matcher: ['/admin/painel/:path*', '/api/admin/agendamentos/:path*', '/api/admin/pacotes/:path*'],
 };
