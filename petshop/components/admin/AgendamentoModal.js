@@ -50,6 +50,7 @@ export default function AgendamentoModal({ agendamento, dataPadrao, horaPadrao, 
   const vinculadoAPacote = modoEdicao && Boolean(agendamento.pacote_id);
   const [form, setForm] = useState(() => estadoInicial(agendamento, dataPadrao, horaPadrao));
   const [salvando, setSalvando] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
   const [erro, setErro] = useState(null);
   const [pacotesAtivos, setPacotesAtivos] = useState([]);
 
@@ -162,6 +163,27 @@ export default function AgendamentoModal({ agendamento, dataPadrao, horaPadrao, 
       setErro('Não foi possível salvar. Verifique sua conexão.');
     } finally {
       setSalvando(false);
+    }
+  }
+
+  async function excluir() {
+    if (!window.confirm('Excluir este agendamento definitivamente? Essa ação não pode ser desfeita.')) {
+      return;
+    }
+    setErro(null);
+    setExcluindo(true);
+    try {
+      const resp = await fetch(`/api/admin/agendamentos?id=${agendamento.id}`, { method: 'DELETE' });
+      const data = await resp.json();
+      if (!resp.ok) {
+        setErro(data.erro || 'Não foi possível excluir.');
+        return;
+      }
+      onSalvo();
+    } catch {
+      setErro('Não foi possível excluir. Verifique sua conexão.');
+    } finally {
+      setExcluindo(false);
     }
   }
 
@@ -339,12 +361,23 @@ export default function AgendamentoModal({ agendamento, dataPadrao, horaPadrao, 
             </button>
             <button
               type="submit"
-              disabled={salvando}
+              disabled={salvando || excluindo}
               className="flex-1 bg-clay-500 hover:bg-clay-600 disabled:opacity-60 text-white font-display py-2.5 rounded-full shadow-soft transition-colors focus-ring"
             >
               {salvando ? 'Salvando…' : 'Salvar'}
             </button>
           </div>
+
+          {modoEdicao && (
+            <button
+              type="button"
+              onClick={excluir}
+              disabled={salvando || excluindo}
+              className="text-xs text-ink/40 hover:text-clay-600 text-center focus-ring rounded mt-1 disabled:opacity-60"
+            >
+              {excluindo ? 'Excluindo…' : 'Excluir este agendamento definitivamente'}
+            </button>
+          )}
         </form>
       </div>
     </div>
@@ -368,4 +401,3 @@ function Campo({ label, value, onChange, type = 'text', required, step, min, dis
     </label>
   );
 }
-

@@ -198,3 +198,32 @@ export async function PATCH(request) {
     return NextResponse.json({ erro: 'Não foi possível atualizar o agendamento.' }, { status: 500 });
   }
 }
+
+// Exclusão definitiva (some da lista e dos relatórios). Se a sessão fazia
+// parte de um pacote e ainda não estava cancelada, devolve o crédito.
+export async function DELETE(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ erro: 'Dados inválidos.' }, { status: 400 });
+    }
+
+    await garantirTabela();
+
+    const atuais = await sql`SELECT status, pacote_id FROM agendamentos WHERE id = ${id}`;
+    const atual = atuais[0];
+
+    await sql`DELETE FROM agendamentos WHERE id = ${id}`;
+
+    if (atual?.pacote_id && atual.status !== 'cancelado') {
+      await ajustarUsoPacote(atual.pacote_id, -1);
+    }
+
+    return NextResponse.json({ sucesso: true });
+  } catch (erro) {
+    console.error(erro);
+    return NextResponse.json({ erro: 'Não foi possível excluir o agendamento.' }, { status: 500 });
+  }
+}

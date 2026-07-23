@@ -46,8 +46,8 @@ function dataPagamentoChave(p) {
 }
 
 // Calcula o intervalo de datas correspondente ao filtro de período escolhido.
-// Retorna null para "próximos" (usa o comportamento padrão da API) e para
-// "personalizado" enquanto as duas datas não foram preenchidas.
+// Retorna null para "próximos" (usa o comportamento padrão da API) e
+// undefined para "personalizado" enquanto as duas datas não foram preenchidas.
 function calcularRangeFiltro(periodo, personalizado) {
   const hoje = new Date();
   if (periodo === 'hoje') {
@@ -66,7 +66,7 @@ function calcularRangeFiltro(periodo, personalizado) {
   }
   if (periodo === 'personalizado') {
     if (personalizado.inicio && personalizado.fim) return personalizado;
-    return undefined; // aguardando o usuário preencher as duas datas
+    return undefined;
   }
   return null; // 'proximos'
 }
@@ -210,6 +210,20 @@ export default function PainelAdminPage() {
     }
   }
 
+  async function excluirAgendamento(id) {
+    if (!window.confirm('Excluir este agendamento definitivamente? Essa ação não pode ser desfeita.')) {
+      return;
+    }
+    setAgendamentos((atual) => atual.filter((a) => a.id !== id));
+    setSemana((atual) => atual.filter((a) => a.id !== id));
+    setAgendaSemana((atual) => atual.filter((a) => a.id !== id));
+    try {
+      await fetch(`/api/admin/agendamentos?id=${id}`, { method: 'DELETE' });
+    } finally {
+      recarregarTudo();
+    }
+  }
+
   async function sair() {
     await fetch('/api/admin/logout', { method: 'POST' });
     router.push('/admin');
@@ -345,58 +359,61 @@ export default function PainelAdminPage() {
       {visualizacao === 'lista' && (
         <>
           {/* FILTROS */}
-          <div className="flex flex-wrap items-end gap-3 mb-6">
-            <label className="block">
-              <span className="text-xs font-display text-teal-900 uppercase tracking-wide">Período</span>
-              <select
-                value={periodoFiltro}
-                onChange={(e) => setPeriodoFiltro(e.target.value)}
-                className="mt-1 rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-3 py-2 bg-white focus-ring text-sm"
-              >
-                <option value="proximos">Próximos agendamentos</option>
-                <option value="hoje">Hoje</option>
-                <option value="semana">Esta semana</option>
-                <option value="mes">Este mês</option>
-                <option value="personalizado">Período personalizado</option>
-              </select>
-            </label>
+          <div className="bg-white rounded-2xl shadow-soft p-4 md:p-5 mb-6">
+            <p className="text-xs font-display text-ink/40 uppercase tracking-wide mb-3">Filtrar</p>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <label className="block">
+                <span className="block text-xs font-display text-teal-900 mb-1">Período</span>
+                <select
+                  value={periodoFiltro}
+                  onChange={(e) => setPeriodoFiltro(e.target.value)}
+                  className="w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-3 py-2.5 bg-cream-soft focus-ring text-sm"
+                >
+                  <option value="proximos">Próximos agendamentos</option>
+                  <option value="hoje">Hoje</option>
+                  <option value="semana">Esta semana</option>
+                  <option value="mes">Este mês</option>
+                  <option value="personalizado">Período personalizado</option>
+                </select>
+              </label>
 
-            {periodoFiltro === 'personalizado' && (
-              <>
-                <label className="block">
-                  <span className="text-xs font-display text-teal-900 uppercase tracking-wide">De</span>
-                  <input
-                    type="date"
-                    value={filtroDataInicio}
-                    onChange={(e) => setFiltroDataInicio(e.target.value)}
-                    className="mt-1 rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-3 py-2 bg-white focus-ring text-sm"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-display text-teal-900 uppercase tracking-wide">Até</span>
-                  <input
-                    type="date"
-                    value={filtroDataFim}
-                    onChange={(e) => setFiltroDataFim(e.target.value)}
-                    className="mt-1 rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-3 py-2 bg-white focus-ring text-sm"
-                  />
-                </label>
-              </>
-            )}
+              {periodoFiltro === 'personalizado' && (
+                <>
+                  <label className="block">
+                    <span className="block text-xs font-display text-teal-900 mb-1">De</span>
+                    <input
+                      type="date"
+                      value={filtroDataInicio}
+                      onChange={(e) => setFiltroDataInicio(e.target.value)}
+                      className="w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-3 py-2.5 bg-cream-soft focus-ring text-sm"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="block text-xs font-display text-teal-900 mb-1">Até</span>
+                    <input
+                      type="date"
+                      value={filtroDataFim}
+                      onChange={(e) => setFiltroDataFim(e.target.value)}
+                      className="w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-3 py-2.5 bg-cream-soft focus-ring text-sm"
+                    />
+                  </label>
+                </>
+              )}
 
-            <label className="block">
-              <span className="text-xs font-display text-teal-900 uppercase tracking-wide">Status</span>
-              <select
-                value={filtroStatus}
-                onChange={(e) => setFiltroStatus(e.target.value)}
-                className="mt-1 rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-3 py-2 bg-white focus-ring text-sm"
-              >
-                <option value="todos">Todos</option>
-                <option value="confirmado">Confirmado</option>
-                <option value="concluido">Concluído</option>
-                <option value="cancelado">Cancelado</option>
-              </select>
-            </label>
+              <label className="block">
+                <span className="block text-xs font-display text-teal-900 mb-1">Status</span>
+                <select
+                  value={filtroStatus}
+                  onChange={(e) => setFiltroStatus(e.target.value)}
+                  className="w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-3 py-2.5 bg-cream-soft focus-ring text-sm"
+                >
+                  <option value="todos">Todos</option>
+                  <option value="confirmado">Confirmado</option>
+                  <option value="concluido">Concluído</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              </label>
+            </div>
           </div>
 
           {carregando && <p className="text-ink/60">Carregando…</p>}
@@ -488,6 +505,13 @@ export default function PainelAdminPage() {
                             Cancelar
                           </button>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => excluirAgendamento(a.id)}
+                          className="text-xs font-display border-2 border-red-400 text-red-500 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-full transition-colors focus-ring"
+                        >
+                          Excluir
+                        </button>
                       </div>
                     </div>
                   ))}
