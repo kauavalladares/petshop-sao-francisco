@@ -17,7 +17,7 @@ Além da área destinada aos clientes, o sistema conta com um painel de gerencia
 
 > *Adicione uma imagem aqui.*
 
-![Página Inicial](./images/home.png)
+![Página Inicial]("C:\Users\Usuario\Downloads\petshop-sao-francisco-nwm4vidae-kauavalladares-projects.vercel.app_.png")
 
 ---
 
