@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SERVICOS, formatarPreco } from '@/lib/servicos';
 import { calcularComissao } from '@/lib/comissao';
+import RelatorioProducao from '@/components/producao/RelatorioProducao';
 
 function toISO(date) {
   const y = date.getFullYear();
@@ -43,6 +44,8 @@ function estadoInicialForm() {
 
 export default function ProducaoPainelPage() {
   const router = useRouter();
+
+  const [visualizacao, setVisualizacao] = useState('registrar'); // 'registrar' | 'relatorio'
 
   const [registros, setRegistros] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -203,6 +206,36 @@ export default function ProducaoPainelPage() {
         </div>
       </div>
 
+      {/* ABAS */}
+      <div className="flex gap-2 mb-6 border-b border-cream-line">
+        <button
+          type="button"
+          onClick={() => setVisualizacao('registrar')}
+          className={`font-display px-4 py-2.5 border-b-2 -mb-px transition-colors focus-ring ${
+            visualizacao === 'registrar'
+              ? 'border-teal-800 text-teal-900'
+              : 'border-transparent text-ink/50 hover:text-ink/80'
+          }`}
+        >
+          Registrar
+        </button>
+        <button
+          type="button"
+          onClick={() => setVisualizacao('relatorio')}
+          className={`font-display px-4 py-2.5 border-b-2 -mb-px transition-colors focus-ring ${
+            visualizacao === 'relatorio'
+              ? 'border-teal-800 text-teal-900'
+              : 'border-transparent text-ink/50 hover:text-ink/80'
+          }`}
+        >
+          Relatório
+        </button>
+      </div>
+
+      {visualizacao === 'relatorio' && <RelatorioProducao />}
+
+      {visualizacao === 'registrar' && (
+        <>
       {/* FORMULÁRIO DE REGISTRO RÁPIDO */}
       <div className="bg-white rounded-2xl shadow-soft p-5 md:p-6 mb-10">
         <p className="font-display text-lg text-teal-900 mb-4">Registrar banho ou tosa</p>
@@ -339,6 +372,8 @@ export default function ProducaoPainelPage() {
           </div>
         ))}
       </div>
+        </>
+      )}
     </div>
   );
 }
