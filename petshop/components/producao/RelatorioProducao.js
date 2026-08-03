@@ -29,6 +29,49 @@ function formatarDataCurta(iso) {
   return `${dia}/${mes}`;
 }
 
+function fimDaSemana(segundaISO) {
+  const d = new Date(`${segundaISO}T12:00:00`);
+  d.setDate(d.getDate() + 6);
+  return toISO(d);
+}
+
+function gerarTextoResumo(mesLabel, ano, dados) {
+  const linhas = [`Relatório de produção — ${mesLabel} ${ano}`, ''];
+
+  linhas.push('Por semana:');
+  if (dados.porSemana.length === 0) {
+    linhas.push('Sem registros neste mês.');
+  } else {
+    for (const s of dados.porSemana) {
+      linhas.push(
+        `${formatarDataCurta(s.segunda)} a ${formatarDataCurta(fimDaSemana(s.segunda))}: ${s.count} ${
+          s.count === 1 ? 'atendimento' : 'atendimentos'
+        } — ${formatarPreco(s.comissao)}`
+      );
+    }
+  }
+
+  linhas.push('', 'Por serviço:');
+  if (dados.porServico.length === 0) {
+    linhas.push('Sem registros neste mês.');
+  } else {
+    for (const s of dados.porServico) {
+      linhas.push(
+        `${s.servico}: ${s.count} ${s.count === 1 ? 'atendimento' : 'atendimentos'} — ${formatarPreco(s.comissao)}`
+      );
+    }
+  }
+
+  linhas.push(
+    '',
+    `Total do mês: ${dados.totalAtendimentos} ${
+      dados.totalAtendimentos === 1 ? 'atendimento' : 'atendimentos'
+    } — ${formatarPreco(dados.totalComissao)}`
+  );
+
+  return linhas.join('\n');
+}
+
 export default function RelatorioProducao() {
   const [mesVisivel, setMesVisivel] = useState(() => {
     const hoje = new Date();
@@ -37,6 +80,8 @@ export default function RelatorioProducao() {
   const [registros, setRegistros] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
+  const [copiado, setCopiado] = useState(false);
+  const [gerandoPdf, setGerandoPdf] = useState(false);
 
   const ano = mesVisivel.getFullYear();
   const mes = mesVisivel.getMonth();
@@ -111,6 +156,89 @@ export default function RelatorioProducao() {
     };
   }, [registros]);
 
+  async function compartilharResumo() {
+    const texto = gerarTextoResumo(MESES_LABEL[mes], ano, dados);
+    const titulo = `Relatório de produção — ${MESES_LABEL[mes]} ${ano}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: titulo, text: texto });
+        return;
+      } catch {
+        // usuário cancelou o compartilhamento — não faz nada
+        return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      window.prompt('Copie o texto abaixo:', texto);
+    }
+  }
+
+  async function baixarPdf() {
+    setGerandoPdf(true);
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      await import('jspdf-autotable');
+
+      const doc = new jsPDF();
+      const titulo = `Relatório de produção — ${MESES_LABEL[mes]} ${ano}`;
+
+      doc.setFontSize(16);
+      doc.text(titulo, 14, 18);
+
+      doc.setFontSize(11);
+      doc.text(
+        `Total do mês: ${dados.totalAtendimentos} ${
+          dados.totalAtendimentos === 1 ? 'atendimento' : 'atendimentos'
+        } — ${formatarPreco(dados.totalComissao)}`,
+        14,
+        27
+      );
+
+      doc.autoTable({
+        startY: 34,
+        head: [['Semana', 'Atendimentos', 'Valor']],
+        body:
+          dados.porSemana.length > 0
+            ? dados.porSemana.map((s) => [
+                `${formatarDataCurta(s.segunda)} a ${formatarDataCurta(fimDaSemana(s.segunda))}`,
+                String(s.count),
+                formatarPreco(s.comissao),
+              ])
+            : [['Sem registros neste mês.', '', '']],
+        headStyles: { fillColor: [21, 69, 72] },
+      });
+
+      const proximaY = doc.lastAutoTable.finalY + 12;
+
+      doc.setFontSize(13);
+      doc.text('Por serviço', 14, proximaY);
+
+      doc.autoTable({
+        startY: proximaY + 5,
+        head: [['Serviço', 'Atendimentos', 'Valor']],
+        body:
+          dados.porServico.length > 0
+            ? dados.porServico.map((s) => [s.servico, String(s.count), formatarPreco(s.comissao)])
+            : [['Sem registros neste mês.', '', '']],
+        headStyles: { fillColor: [21, 69, 72] },
+      });
+
+      const nomeArquivo = `producao-${MESES_LABEL[mes].toLowerCase()}-${ano}.pdf`;
+      doc.save(nomeArquivo);
+    } catch (erro) {
+      console.error(erro);
+      window.alert('Não foi possível gerar o PDF. Tente novamente.');
+    } finally {
+      setGerandoPdf(false);
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -134,6 +262,26 @@ export default function RelatorioProducao() {
           ›
         </button>
       </div>
+
+      {!carregando && !erro && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          <button
+            type="button"
+            onClick={compartilharResumo}
+            className="text-sm font-display border-2 border-teal-800 text-teal-800 hover:bg-teal-800 hover:text-white px-4 py-2 rounded-full transition-colors focus-ring"
+          >
+            {copiado ? 'Copiado!' : 'Compartilhar resumo'}
+          </button>
+          <button
+            type="button"
+            onClick={baixarPdf}
+            disabled={gerandoPdf}
+            className="text-sm font-display bg-clay-500 hover:bg-clay-600 disabled:opacity-60 text-white px-4 py-2 rounded-full shadow-soft transition-colors focus-ring"
+          >
+            {gerandoPdf ? 'Gerando PDF…' : 'Baixar PDF'}
+          </button>
+        </div>
+      )}
 
       {carregando && <p className="text-ink/60">Carregando…</p>}
       {erro && <p className="text-clay-600">{erro}</p>}
@@ -182,13 +330,11 @@ export default function RelatorioProducao() {
             ) : (
               <div className="bg-white rounded-2xl shadow-soft divide-y divide-cream-line">
                 {dados.porSemana.map((s) => {
-                  const fimSemana = new Date(`${s.segunda}T12:00:00`);
-                  fimSemana.setDate(fimSemana.getDate() + 6);
                   return (
                     <div key={s.segunda} className="flex items-center justify-between px-5 py-3.5">
                       <div>
                         <p className="font-display text-teal-900">
-                          {formatarDataCurta(s.segunda)} a {formatarDataCurta(toISO(fimSemana))}
+                          {formatarDataCurta(s.segunda)} a {formatarDataCurta(fimDaSemana(s.segunda))}
                         </p>
                         <p className="text-xs text-ink/50">
                           {s.count} {s.count === 1 ? 'atendimento' : 'atendimentos'}
