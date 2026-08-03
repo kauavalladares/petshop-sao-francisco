@@ -60,5 +60,20 @@ export async function garantirTabela() {
     ADD COLUMN IF NOT EXISTS pacote_id INTEGER REFERENCES pacotes(id)
   `;
 
+  // Registros de produção: sistema separado, de uso pessoal de quem realiza
+  // os banhos/tosas, para controlar quantos atendimentos fez e quanto tem a
+  // receber de comissão. Não tem relação com os agendamentos de clientes.
+  await sql`
+    CREATE TABLE IF NOT EXISTS producoes (
+      id SERIAL PRIMARY KEY,
+      servico_nome VARCHAR(120) NOT NULL,
+      valor_servico NUMERIC(10,2) NOT NULL,
+      valor_comissao NUMERIC(10,2) NOT NULL,
+      data DATE NOT NULL DEFAULT CURRENT_DATE,
+      observacao VARCHAR(255),
+      criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `;
+
   tabelaGarantida = true;
 }
