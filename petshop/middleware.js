@@ -30,6 +30,6 @@ export const config = {
     '/api/admin/agendamentos/:path*',
     '/api/admin/pacotes/:path*',
     '/producao/painel/:path*',
-    '/api/producao/:path*',
+    '/api/producao/registros/:path*',
   ],
 };
