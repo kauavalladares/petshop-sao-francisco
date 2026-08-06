@@ -10,6 +10,7 @@ export default function PacoteRapidoModal({ onFechar, onSalvo }) {
     servicoNome: SERVICOS[0].nome,
     quantidadeTotal: '4',
     valorTotal: '',
+    pago: false,
   });
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState(null);
@@ -43,6 +44,7 @@ export default function PacoteRapidoModal({ onFechar, onSalvo }) {
           servicoNome: form.servicoNome,
           quantidadeTotal: quantidade,
           valorTotal: Number(form.valorTotal),
+          pago: form.pago,
         }),
       });
       const data = await resp.json();
@@ -140,6 +142,20 @@ export default function PacoteRapidoModal({ onFechar, onSalvo }) {
               Equivale a {valorPorSessao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} por sessão
             </p>
           )}
+
+          <label className="flex items-center gap-2.5 -mt-1">
+            <input
+              type="checkbox"
+              checked={form.pago}
+              onChange={(e) => alterarCampo('pago', e.target.checked)}
+              className="w-4 h-4 accent-teal-800"
+            />
+            <span className="text-sm text-ink/80">Já foi pago (hoje)</span>
+          </label>
+          <p className="text-xs text-ink/50 -mt-3">
+            Se o cliente for pagar só no final, deixe desmarcado — dá para marcar como pago
+            depois, direto na lista de pacotes, no dia em que o valor realmente entrar.
+          </p>
 
           {erro && <p className="text-sm text-clay-600">{erro}</p>}
 

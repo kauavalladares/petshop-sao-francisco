@@ -6,6 +6,7 @@ import { SERVICOS, formatarPreco } from '@/lib/servicos';
 import { calcularComissao } from '@/lib/comissao';
 import RelatorioProducao from '@/components/producao/RelatorioProducao';
 import PacoteRapidoModal from '@/components/producao/PacoteRapidoModal';
+import PacotesLista from '@/components/producao/PacotesLista';
 
 function toISO(date) {
   const y = date.getFullYear();
@@ -47,7 +48,7 @@ function estadoInicialForm() {
 export default function ProducaoPainelPage() {
   const router = useRouter();
 
-  const [visualizacao, setVisualizacao] = useState('registrar'); // 'registrar' | 'relatorio'
+  const [visualizacao, setVisualizacao] = useState('registrar'); // 'registrar' | 'relatorio' | 'pacotes'
   const [modalPacote, setModalPacote] = useState(false);
 
   const [registros, setRegistros] = useState([]);
@@ -267,9 +268,22 @@ export default function ProducaoPainelPage() {
         >
           Relatório
         </button>
+        <button
+          type="button"
+          onClick={() => setVisualizacao('pacotes')}
+          className={`font-display px-4 py-2.5 border-b-2 -mb-px transition-colors focus-ring ${
+            visualizacao === 'pacotes'
+              ? 'border-teal-800 text-teal-900'
+              : 'border-transparent text-ink/50 hover:text-ink/80'
+          }`}
+        >
+          Pacotes
+        </button>
       </div>
 
       {visualizacao === 'relatorio' && <RelatorioProducao />}
+
+      {visualizacao === 'pacotes' && <PacotesLista />}
 
       {visualizacao === 'registrar' && (
         <>
