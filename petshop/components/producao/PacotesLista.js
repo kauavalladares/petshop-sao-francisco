@@ -59,6 +59,16 @@ export default function PacotesLista() {
     }
   }
 
+  async function excluirPacote(id) {
+    if (!window.confirm('Excluir este pacote definitivamente? Essa ação não pode ser desfeita.')) return;
+    setPacotes((atual) => atual.filter((p) => p.id !== id));
+    try {
+      await fetch(`/api/producao/pacotes-ativos?id=${id}`, { method: 'DELETE' });
+    } catch {
+      carregar();
+    }
+  }
+
   const grupos = [
     { chave: 'ativo', titulo: 'Ativos' },
     { chave: 'finalizado', titulo: 'Concluídos' },
@@ -129,15 +139,24 @@ export default function PacotesLista() {
                           </span>
                         </div>
 
-                        {!p.pago && p.status !== 'cancelado' && (
+                        <div className="flex gap-2 shrink-0 flex-wrap">
+                          {!p.pago && p.status !== 'cancelado' && (
+                            <button
+                              type="button"
+                              onClick={() => marcarPago(p.id)}
+                              className="text-xs font-display border-2 border-moss-500 text-moss-600 hover:bg-moss-500 hover:text-white px-3 py-1.5 rounded-full transition-colors focus-ring"
+                            >
+                              Marcar como pago
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={() => marcarPago(p.id)}
-                            className="text-xs font-display border-2 border-moss-500 text-moss-600 hover:bg-moss-500 hover:text-white px-3 py-1.5 rounded-full transition-colors focus-ring shrink-0"
+                            onClick={() => excluirPacote(p.id)}
+                            className="text-xs font-display border-2 border-red-400 text-red-500 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-full transition-colors focus-ring"
                           >
-                            Marcar como pago
+                            Excluir
                           </button>
-                        )}
+                        </div>
                       </div>
                     );
                   })}

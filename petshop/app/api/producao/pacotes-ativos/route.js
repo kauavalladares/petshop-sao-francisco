@@ -85,3 +85,27 @@ export async function PATCH(request) {
   }
 }
 
+// Exclui um pacote definitivamente. Registros de produção que já usaram uma
+// sessão desse pacote são mantidos (o histórico de comissão dela não some),
+// só perdem o vínculo com o pacote apagado.
+export async function DELETE(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ erro: 'Dados inválidos.' }, { status: 400 });
+    }
+
+    await garantirTabela();
+
+    await sql`UPDATE producoes SET pacote_id = NULL WHERE pacote_id = ${id}`;
+    await sql`UPDATE agendamentos SET pacote_id = NULL WHERE pacote_id = ${id}`;
+    await sql`DELETE FROM pacotes WHERE id = ${id}`;
+
+    return NextResponse.json({ sucesso: true });
+  } catch (erro) {
+    console.error(erro);
+    return NextResponse.json({ erro: 'Não foi possível excluir o pacote.' }, { status: 500 });
+  }
+}
+
