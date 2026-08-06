@@ -275,25 +275,28 @@ export default function ProducaoPainelPage() {
           <div className="bg-white rounded-2xl shadow-soft p-5 md:p-6 mb-10">
             <p className="font-display text-lg text-teal-900 mb-4">Registrar banho ou tosa</p>
             <form onSubmit={registrar} className="grid gap-4">
-              {pacotesAtivos.length > 0 && (
-                <label className="block">
-                  <span className="text-sm font-display text-teal-900">
-                    Usar sessão de um pacote (opcional)
+              <label className="block">
+                <span className="text-sm font-display text-teal-900">
+                  Usar sessão de um pacote (opcional)
+                </span>
+                <select
+                  value={form.pacoteId || ''}
+                  onChange={(e) => selecionarPacote(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
+                >
+                  <option value="">— Avulso —</option>
+                  {pacotesAtivos.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.cliente_nome} · {p.servico_nome} ({p.quantidade_usada}/{p.quantidade_total} usadas)
+                    </option>
+                  ))}
+                </select>
+                {pacotesAtivos.length === 0 && (
+                  <span className="block text-xs text-ink/40 mt-1">
+                    Nenhum pacote ativo no momento.
                   </span>
-                  <select
-                    value={form.pacoteId || ''}
-                    onChange={(e) => selecionarPacote(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
-                  >
-                    <option value="">— Avulso —</option>
-                    {pacotesAtivos.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.cliente_nome} · {p.servico_nome} ({p.quantidade_usada}/{p.quantidade_total} usadas)
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+                )}
+              </label>
 
               <label className="block">
                 <span className="text-sm font-display text-teal-900">Serviço</span>
