@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { SERVICOS, formatarPreco } from '@/lib/servicos';
 import { calcularComissao } from '@/lib/comissao';
 import RelatorioProducao from '@/components/producao/RelatorioProducao';
+import PacoteRapidoModal from '@/components/producao/PacoteRapidoModal';
 
 function toISO(date) {
   const y = date.getFullYear();
@@ -47,6 +48,7 @@ export default function ProducaoPainelPage() {
   const router = useRouter();
 
   const [visualizacao, setVisualizacao] = useState('registrar'); // 'registrar' | 'relatorio'
+  const [modalPacote, setModalPacote] = useState(false);
 
   const [registros, setRegistros] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -275,14 +277,23 @@ export default function ProducaoPainelPage() {
           <div className="bg-white rounded-2xl shadow-soft p-5 md:p-6 mb-10">
             <p className="font-display text-lg text-teal-900 mb-4">Registrar banho ou tosa</p>
             <form onSubmit={registrar} className="grid gap-4">
-              <label className="block">
-                <span className="text-sm font-display text-teal-900">
-                  Usar sessão de um pacote (opcional)
-                </span>
+              <div className="block">
+                <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
+                  <span className="text-sm font-display text-teal-900">
+                    Usar sessão de um pacote (opcional)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setModalPacote(true)}
+                    className="text-xs font-display text-clay-600 hover:text-clay-700 focus-ring rounded shrink-0"
+                  >
+                    + Novo pacote
+                  </button>
+                </div>
                 <select
                   value={form.pacoteId || ''}
                   onChange={(e) => selecionarPacote(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
+                  className="w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
                 >
                   <option value="">— Avulso —</option>
                   {pacotesAtivos.map((p) => (
@@ -296,7 +307,8 @@ export default function ProducaoPainelPage() {
                     Nenhum pacote ativo no momento.
                   </span>
                 )}
-              </label>
+              </div>
+
 
               <label className="block">
                 <span className="text-sm font-display text-teal-900">Serviço</span>
@@ -443,6 +455,16 @@ export default function ProducaoPainelPage() {
             ))}
           </div>
         </>
+      )}
+
+      {modalPacote && (
+        <PacoteRapidoModal
+          onFechar={() => setModalPacote(false)}
+          onSalvo={() => {
+            setModalPacote(false);
+            carregarPacotesAtivos();
+          }}
+        />
       )}
     </div>
   );
