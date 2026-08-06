@@ -39,6 +39,7 @@ function estadoInicialForm() {
     valorServico: String(SERVICOS[0].preco),
     data: toISO(new Date()),
     observacao: '',
+    pacoteId: null,
   };
 }
 
@@ -50,6 +51,8 @@ export default function ProducaoPainelPage() {
   const [registros, setRegistros] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
+
+  const [pacotesAtivos, setPacotesAtivos] = useState([]);
 
   const [form, setForm] = useState(estadoInicialForm);
   const [salvando, setSalvando] = useState(false);
@@ -82,9 +85,21 @@ export default function ProducaoPainelPage() {
     }
   }, [router]);
 
+  const carregarPacotesAtivos = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/producao/pacotes-ativos');
+      if (resp.status === 401) return;
+      const data = await resp.json();
+      if (resp.ok) setPacotesAtivos(data.pacotes || []);
+    } catch {
+      // opcional — não trava a página se falhar
+    }
+  }, []);
+
   useEffect(() => {
     carregar();
-  }, [carregar]);
+    carregarPacotesAtivos();
+  }, [carregar, carregarPacotesAtivos]);
 
   function alterarServico(servicoId) {
     if (servicoId === 'outro') {
@@ -93,6 +108,23 @@ export default function ProducaoPainelPage() {
     }
     const servico = SERVICOS.find((s) => s.id === servicoId);
     setForm((f) => ({ ...f, servicoId, servicoNome: servico.nome, valorServico: String(servico.preco) }));
+  }
+
+  function selecionarPacote(pacoteIdStr) {
+    if (!pacoteIdStr) {
+      const servico = SERVICOS.find((s) => s.id === form.servicoId) || SERVICOS[0];
+      setForm((f) => ({ ...f, pacoteId: null, servicoNome: servico.nome, valorServico: String(servico.preco) }));
+      return;
+    }
+    const pacote = pacotesAtivos.find((p) => String(p.id) === pacoteIdStr);
+    if (!pacote) return;
+    const valorPorSessao = Math.round((Number(pacote.valor_total) / pacote.quantidade_total) * 100) / 100;
+    setForm((f) => ({
+      ...f,
+      pacoteId: pacote.id,
+      servicoNome: pacote.servico_nome,
+      valorServico: String(valorPorSessao),
+    }));
   }
 
   async function registrar(e) {
@@ -114,6 +146,7 @@ export default function ProducaoPainelPage() {
           valorServico: Number(form.valorServico),
           data: form.data,
           observacao: form.observacao,
+          pacoteId: form.pacoteId || undefined,
         }),
       });
       const data = await resp.json();
@@ -123,6 +156,7 @@ export default function ProducaoPainelPage() {
       }
       setForm((f) => ({ ...estadoInicialForm(), data: f.data })); // mantém a data escolhida para lançar vários seguidos
       carregar();
+      carregarPacotesAtivos();
     } catch {
       setErroForm('Não foi possível salvar. Verifique sua conexão.');
     } finally {
@@ -135,6 +169,7 @@ export default function ProducaoPainelPage() {
     setRegistros((atual) => atual.filter((r) => r.id !== id));
     try {
       await fetch(`/api/producao/registros?id=${id}`, { method: 'DELETE' });
+      carregarPacotesAtivos();
     } catch {
       carregar();
     }
@@ -236,142 +271,174 @@ export default function ProducaoPainelPage() {
 
       {visualizacao === 'registrar' && (
         <>
-      {/* FORMULÁRIO DE REGISTRO RÁPIDO */}
-      <div className="bg-white rounded-2xl shadow-soft p-5 md:p-6 mb-10">
-        <p className="font-display text-lg text-teal-900 mb-4">Registrar banho ou tosa</p>
-        <form onSubmit={registrar} className="grid gap-4">
-          <label className="block">
-            <span className="text-sm font-display text-teal-900">Serviço</span>
-            <select
-              value={form.servicoId}
-              onChange={(e) => alterarServico(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
-            >
-              {SERVICOS.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.nome}
-                </option>
-              ))}
-              <option value="outro">Outro (digitar)</option>
-            </select>
-          </label>
+          {/* FORMULÁRIO DE REGISTRO RÁPIDO */}
+          <div className="bg-white rounded-2xl shadow-soft p-5 md:p-6 mb-10">
+            <p className="font-display text-lg text-teal-900 mb-4">Registrar banho ou tosa</p>
+            <form onSubmit={registrar} className="grid gap-4">
+              {pacotesAtivos.length > 0 && (
+                <label className="block">
+                  <span className="text-sm font-display text-teal-900">
+                    Usar sessão de um pacote (opcional)
+                  </span>
+                  <select
+                    value={form.pacoteId || ''}
+                    onChange={(e) => selecionarPacote(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
+                  >
+                    <option value="">— Avulso —</option>
+                    {pacotesAtivos.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.cliente_nome} · {p.servico_nome} ({p.quantidade_usada}/{p.quantidade_total} usadas)
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
-          {form.servicoId === 'outro' && (
-            <label className="block">
-              <span className="text-sm font-display text-teal-900">Nome do serviço</span>
-              <input
-                type="text"
-                value={form.servicoNome}
-                onChange={(e) => setForm((f) => ({ ...f, servicoNome: e.target.value }))}
-                required
-                className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
-              />
-            </label>
+              <label className="block">
+                <span className="text-sm font-display text-teal-900">Serviço</span>
+                <select
+                  value={form.servicoId}
+                  onChange={(e) => alterarServico(e.target.value)}
+                  disabled={Boolean(form.pacoteId)}
+                  className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring disabled:opacity-60"
+                >
+                  {SERVICOS.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nome}
+                    </option>
+                  ))}
+                  <option value="outro">Outro (digitar)</option>
+                </select>
+              </label>
+
+              {form.servicoId === 'outro' && !form.pacoteId && (
+                <label className="block">
+                  <span className="text-sm font-display text-teal-900">Nome do serviço</span>
+                  <input
+                    type="text"
+                    value={form.servicoNome}
+                    onChange={(e) => setForm((f) => ({ ...f, servicoNome: e.target.value }))}
+                    required
+                    className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
+                  />
+                </label>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-display text-teal-900">Valor do serviço (R$)</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.valorServico}
+                      onChange={(e) => setForm((f) => ({ ...f, valorServico: e.target.value }))}
+                      required
+                      disabled={Boolean(form.pacoteId)}
+                      className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring disabled:opacity-60"
+                    />
+                  </label>
+                  {form.pacoteId && <p className="text-xs text-ink/50 mt-1">Valor por sessão do pacote</p>}
+                </div>
+                <label className="block">
+                  <span className="text-sm font-display text-teal-900">Data</span>
+                  <input
+                    type="date"
+                    value={form.data}
+                    onChange={(e) => setForm((f) => ({ ...f, data: e.target.value }))}
+                    required
+                    className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
+                  />
+                </label>
+              </div>
+
+              <p className="text-sm text-moss-600 -mt-1">
+                Sua parte: <strong>{formatarPreco(comissaoPrevista)}</strong> (metade do valor do serviço)
+              </p>
+
+              <label className="block">
+                <span className="text-sm font-display text-teal-900">Observação (opcional)</span>
+                <input
+                  type="text"
+                  value={form.observacao}
+                  onChange={(e) => setForm((f) => ({ ...f, observacao: e.target.value }))}
+                  placeholder="Ex: nome do pet ou do cliente"
+                  className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
+                />
+              </label>
+
+              {erroForm && <p className="text-sm text-clay-600">{erroForm}</p>}
+
+              <button
+                type="submit"
+                disabled={salvando}
+                className="bg-clay-500 hover:bg-clay-600 disabled:opacity-60 text-white font-display text-lg py-3 rounded-full shadow-soft transition-colors focus-ring"
+              >
+                {salvando ? 'Registrando…' : 'Registrar'}
+              </button>
+            </form>
+          </div>
+
+          {/* HISTÓRICO */}
+          <p className="font-display text-lg text-teal-900 mb-3">Histórico</p>
+
+          {carregando && <p className="text-ink/60">Carregando…</p>}
+          {erro && <p className="text-clay-600">{erro}</p>}
+          {!carregando && !erro && registros.length === 0 && (
+            <p className="text-ink/60">Nenhum registro ainda.</p>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <label className="block">
-              <span className="text-sm font-display text-teal-900">Valor do serviço (R$)</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.valorServico}
-                onChange={(e) => setForm((f) => ({ ...f, valorServico: e.target.value }))}
-                required
-                className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-display text-teal-900">Data</span>
-              <input
-                type="date"
-                value={form.data}
-                onChange={(e) => setForm((f) => ({ ...f, data: e.target.value }))}
-                required
-                className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
-              />
-            </label>
-          </div>
-
-          <p className="text-sm text-moss-600 -mt-1">
-            Sua parte: <strong>{formatarPreco(comissaoPrevista)}</strong> (metade do valor do serviço)
-          </p>
-
-          <label className="block">
-            <span className="text-sm font-display text-teal-900">Observação (opcional)</span>
-            <input
-              type="text"
-              value={form.observacao}
-              onChange={(e) => setForm((f) => ({ ...f, observacao: e.target.value }))}
-              placeholder="Ex: nome do pet ou do cliente"
-              className="mt-1.5 w-full rounded-xl border-2 border-cream-line focus:border-clay-500 outline-none px-4 py-2.5 bg-cream-soft focus-ring"
-            />
-          </label>
-
-          {erroForm && <p className="text-sm text-clay-600">{erroForm}</p>}
-
-          <button
-            type="submit"
-            disabled={salvando}
-            className="bg-clay-500 hover:bg-clay-600 disabled:opacity-60 text-white font-display text-lg py-3 rounded-full shadow-soft transition-colors focus-ring"
-          >
-            {salvando ? 'Registrando…' : 'Registrar'}
-          </button>
-        </form>
-      </div>
-
-      {/* HISTÓRICO */}
-      <p className="font-display text-lg text-teal-900 mb-3">Histórico</p>
-
-      {carregando && <p className="text-ink/60">Carregando…</p>}
-      {erro && <p className="text-clay-600">{erro}</p>}
-      {!carregando && !erro && registros.length === 0 && (
-        <p className="text-ink/60">Nenhum registro ainda.</p>
-      )}
-
-      <div className="grid gap-8">
-        {Object.entries(agrupados).map(([data, lista]) => (
-          <div key={data}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="font-display text-teal-900">
-                {formatarDataLonga(data)}
-                {data === hojeISO && (
-                  <span className="ml-2 align-middle text-xs font-display bg-clay-100 text-clay-600 px-2.5 py-1 rounded-full">
-                    Hoje
-                  </span>
-                )}
-              </p>
-              <p className="text-sm text-ink/50">{formatarPreco(somarComissao(lista))} no dia</p>
-            </div>
-            <div className="grid gap-2.5">
-              {lista.map((r) => (
-                <div
-                  key={r.id}
-                  className="bg-white rounded-2xl shadow-soft px-4 py-3.5 flex items-center gap-3"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-display text-teal-900 truncate">{r.servico_nome}</p>
-                    {r.observacao && <p className="text-xs text-ink/50 truncate">{r.observacao}</p>}
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="font-display text-moss-600">{formatarPreco(Number(r.valor_comissao))}</p>
-                    <p className="text-xs text-ink/40">de {formatarPreco(Number(r.valor_servico))}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => excluir(r.id)}
-                    aria-label="Excluir registro"
-                    className="text-ink/30 hover:text-clay-600 text-xl leading-none px-1.5 focus-ring rounded shrink-0"
-                  >
-                    ×
-                  </button>
+          <div className="grid gap-8">
+            {Object.entries(agrupados).map(([data, lista]) => (
+              <div key={data}>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="font-display text-teal-900">
+                    {formatarDataLonga(data)}
+                    {data === hojeISO && (
+                      <span className="ml-2 align-middle text-xs font-display bg-clay-100 text-clay-600 px-2.5 py-1 rounded-full">
+                        Hoje
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-sm text-ink/50">{formatarPreco(somarComissao(lista))} no dia</p>
                 </div>
-              ))}
-            </div>
+                <div className="grid gap-2.5">
+                  {lista.map((r) => (
+                    <div
+                      key={r.id}
+                      className="bg-white rounded-2xl shadow-soft px-4 py-3.5 flex items-center gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-display text-teal-900 truncate">{r.servico_nome}</p>
+                          {r.pacote_id && (
+                            <span className="text-[10px] font-display text-teal-800 border border-teal-800/30 bg-clay-100 px-1.5 py-0.5 rounded-full shrink-0">
+                              pacote
+                            </span>
+                          )}
+                        </div>
+                        {r.observacao && <p className="text-xs text-ink/50 truncate">{r.observacao}</p>}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-display text-moss-600">{formatarPreco(Number(r.valor_comissao))}</p>
+                        <p className="text-xs text-ink/40">de {formatarPreco(Number(r.valor_servico))}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => excluir(r.id)}
+                        aria-label="Excluir registro"
+                        className="text-ink/30 hover:text-clay-600 text-xl leading-none px-1.5 focus-ring rounded shrink-0"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
         </>
       )}
     </div>

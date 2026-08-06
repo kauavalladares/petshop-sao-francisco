@@ -2,6 +2,17 @@ import { NextResponse } from 'next/server';
 import { sql, garantirTabela } from '@/lib/db';
 import { calcularComissao } from '@/lib/comissao';
 
+// Ajusta quantas sessões de um pacote já foram usadas (delta +1 ou -1) e
+// mantém o status do pacote em dia ('ativo' <-> 'finalizado').
+async function ajustarUsoPacote(pacoteId, delta) {
+  const rows = await sql`SELECT quantidade_total, quantidade_usada, status FROM pacotes WHERE id = ${pacoteId}`;
+  const pacote = rows[0];
+  if (!pacote || pacote.status === 'cancelado') return;
+  const novaUsada = Math.max(0, pacote.quantidade_usada + delta);
+  const novoStatus = novaUsada >= pacote.quantidade_total ? 'finalizado' : 'ativo';
+  await sql`UPDATE pacotes SET quantidade_usada = ${novaUsada}, status = ${novoStatus} WHERE id = ${pacoteId}`;
+}
+
 export async function GET(request) {
   try {
     await garantirTabela();
@@ -34,7 +45,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { servicoNome, valorServico, data, observacao } = body || {};
+    const { servicoNome, valorServico, data, observacao, pacoteId } = body || {};
 
     const valorServicoNumero = Number(valorServico);
     if (!servicoNome?.trim() || !data || Number.isNaN(valorServicoNumero) || valorServicoNumero < 0) {
@@ -45,9 +56,13 @@ export async function POST(request) {
 
     await garantirTabela();
     await sql`
-      INSERT INTO producoes (servico_nome, valor_servico, valor_comissao, data, observacao)
-      VALUES (${servicoNome.trim()}, ${valorServicoNumero}, ${valorComissao}, ${data}, ${observacao?.trim() || null})
+      INSERT INTO producoes (servico_nome, valor_servico, valor_comissao, data, observacao, pacote_id)
+      VALUES (${servicoNome.trim()}, ${valorServicoNumero}, ${valorComissao}, ${data}, ${observacao?.trim() || null}, ${pacoteId || null})
     `;
+
+    if (pacoteId) {
+      await ajustarUsoPacote(pacoteId, 1);
+    }
 
     return NextResponse.json({ sucesso: true });
   } catch (erro) {
@@ -65,7 +80,15 @@ export async function DELETE(request) {
     }
 
     await garantirTabela();
+
+    const atuais = await sql`SELECT pacote_id FROM producoes WHERE id = ${id}`;
+    const atual = atuais[0];
+
     await sql`DELETE FROM producoes WHERE id = ${id}`;
+
+    if (atual?.pacote_id) {
+      await ajustarUsoPacote(atual.pacote_id, -1);
+    }
 
     return NextResponse.json({ sucesso: true });
   } catch (erro) {

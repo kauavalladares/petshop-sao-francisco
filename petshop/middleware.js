@@ -31,5 +31,6 @@ export const config = {
     '/api/admin/pacotes/:path*',
     '/producao/painel/:path*',
     '/api/producao/registros/:path*',
+    '/api/producao/pacotes-ativos/:path*',
   ],
 };

@@ -16,6 +16,14 @@ export const SERVICOS = [
     categoria: 'banho',
   },
   {
+    id: 'banho-terca-maluca',
+    nome: 'Banho — Terça Maluca',
+    resumo: 'Promoção de terça-feira para banho de porte pequeno/médio.',
+    preco: 35,
+    duracaoMin: 40,
+    categoria: 'banho',
+  },
+  {
     id: 'tosa-menor',
     nome: 'Tosa — cães menores',
     resumo: 'Tosa completa para cães de porte menor.',

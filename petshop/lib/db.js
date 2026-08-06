@@ -62,7 +62,8 @@ export async function garantirTabela() {
 
   // Registros de produção: sistema separado, de uso pessoal de quem realiza
   // os banhos/tosas, para controlar quantos atendimentos fez e quanto tem a
-  // receber de comissão. Não tem relação com os agendamentos de clientes.
+  // receber de comissão. Não tem relação com os agendamentos de clientes,
+  // exceto quando o banho realizado faz parte de um pacote já vendido.
   await sql`
     CREATE TABLE IF NOT EXISTS producoes (
       id SERIAL PRIMARY KEY,
@@ -73,6 +74,13 @@ export async function garantirTabela() {
       observacao VARCHAR(255),
       criado_em TIMESTAMP NOT NULL DEFAULT NOW()
     );
+  `;
+
+  // Vincula um registro de produção a um pacote de cliente (quando o banho
+  // realizado é uma sessão de um pacote já vendido, em vez de avulso).
+  await sql`
+    ALTER TABLE producoes
+    ADD COLUMN IF NOT EXISTS pacote_id INTEGER REFERENCES pacotes(id)
   `;
 
   tabelaGarantida = true;
