@@ -42,7 +42,7 @@ export default function Footer() {
         © {new Date().getFullYear()} Agropecuária e Pet Shop São Francisco
         {' · '}
         <Link href="/equipe" className="hover:text-cream-soft/90 transition-colors">
-          Acesso da equipe
+          (Acesso da equipe)
         </Link>
       </div>
     </footer>
