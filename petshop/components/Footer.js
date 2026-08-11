@@ -40,6 +40,10 @@ export default function Footer() {
 
       <div className="border-t border-white/10 py-4 text-center text-xs text-cream-soft/60">
         © {new Date().getFullYear()} Agropecuária e Pet Shop São Francisco
+        {' · '}
+        <Link href="/equipe" className="hover:text-cream-soft/90 transition-colors">
+          Acesso da equipe
+        </Link>
       </div>
     </footer>
   );
