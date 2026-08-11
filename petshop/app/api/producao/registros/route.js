@@ -71,6 +71,57 @@ export async function POST(request) {
   }
 }
 
+// Edita um registro já lançado. Se ele estiver vinculado a um pacote, o
+// serviço e o valor ficam travados (já foram definidos ao usar a sessão do
+// pacote) — só data e observação podem ser corrigidas nesse caso.
+export async function PATCH(request) {
+  try {
+    const body = await request.json();
+    const { id, servicoNome, valorServico, data, observacao } = body || {};
+
+    if (!id || !data) {
+      return NextResponse.json({ erro: 'Informe a data.' }, { status: 400 });
+    }
+
+    await garantirTabela();
+
+    const atuais = await sql`SELECT pacote_id FROM producoes WHERE id = ${id}`;
+    const atual = atuais[0];
+    if (!atual) {
+      return NextResponse.json({ erro: 'Registro não encontrado.' }, { status: 404 });
+    }
+
+    if (atual.pacote_id) {
+      await sql`
+        UPDATE producoes SET data = ${data}, observacao = ${observacao?.trim() || null}
+        WHERE id = ${id}
+      `;
+      return NextResponse.json({ sucesso: true });
+    }
+
+    const valorServicoNumero = Number(valorServico);
+    if (!servicoNome?.trim() || Number.isNaN(valorServicoNumero) || valorServicoNumero < 0) {
+      return NextResponse.json({ erro: 'Preencha o serviço e o valor.' }, { status: 400 });
+    }
+    const valorComissao = calcularComissao(valorServicoNumero);
+
+    await sql`
+      UPDATE producoes SET
+        servico_nome = ${servicoNome.trim()},
+        valor_servico = ${valorServicoNumero},
+        valor_comissao = ${valorComissao},
+        data = ${data},
+        observacao = ${observacao?.trim() || null}
+      WHERE id = ${id}
+    `;
+
+    return NextResponse.json({ sucesso: true });
+  } catch (erro) {
+    console.error(erro);
+    return NextResponse.json({ erro: 'Não foi possível atualizar o registro.' }, { status: 500 });
+  }
+}
+
 export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);

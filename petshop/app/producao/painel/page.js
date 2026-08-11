@@ -7,6 +7,7 @@ import { calcularComissao } from '@/lib/comissao';
 import RelatorioProducao from '@/components/producao/RelatorioProducao';
 import PacoteRapidoModal from '@/components/producao/PacoteRapidoModal';
 import PacotesLista from '@/components/producao/PacotesLista';
+import EditarRegistroModal from '@/components/producao/EditarRegistroModal';
 
 function toISO(date) {
   const y = date.getFullYear();
@@ -50,6 +51,8 @@ export default function ProducaoPainelPage() {
 
   const [visualizacao, setVisualizacao] = useState('registrar'); // 'registrar' | 'relatorio' | 'pacotes'
   const [modalPacote, setModalPacote] = useState(false);
+  const [modalEditar, setModalEditar] = useState(null);
+  const [sucesso, setSucesso] = useState(false);
 
   const [registros, setRegistros] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -60,6 +63,8 @@ export default function ProducaoPainelPage() {
   const [form, setForm] = useState(estadoInicialForm);
   const [salvando, setSalvando] = useState(false);
   const [erroForm, setErroForm] = useState(null);
+  const [editando, setEditando] = useState(null); // registro sendo editado, ou null
+  const [mensagemSucesso, setMensagemSucesso] = useState(null);
 
   const hoje = useMemo(() => new Date(), []);
   const hojeISO = useMemo(() => toISO(hoje), [hoje]);
@@ -130,6 +135,19 @@ export default function ProducaoPainelPage() {
     }));
   }
 
+  function repetirUltimo() {
+    if (!ultimoRegistro) return;
+    const servicoEncontrado = SERVICOS.find((s) => s.nome === ultimoRegistro.servico_nome);
+    setForm((f) => ({
+      ...f,
+      servicoId: servicoEncontrado ? servicoEncontrado.id : 'outro',
+      servicoNome: ultimoRegistro.servico_nome,
+      valorServico: String(Number(ultimoRegistro.valor_servico)),
+      observacao: '',
+      pacoteId: null,
+    }));
+  }
+
   async function registrar(e) {
     e.preventDefault();
     setErroForm(null);
@@ -158,6 +176,8 @@ export default function ProducaoPainelPage() {
         return;
       }
       setForm((f) => ({ ...estadoInicialForm(), data: f.data })); // mantém a data escolhida para lançar vários seguidos
+      setSucesso(true);
+      setTimeout(() => setSucesso(false), 2500);
       carregar();
       carregarPacotesAtivos();
     } catch {
@@ -184,6 +204,8 @@ export default function ProducaoPainelPage() {
   }
 
   const comissaoPrevista = form.valorServico !== '' ? calcularComissao(Number(form.valorServico) || 0) : 0;
+
+  const ultimoRegistro = registros[0] || null; // já vem ordenado do mais recente para o mais antigo
 
   const registrosHoje = registros.filter((r) => dataChave(r) === hojeISO);
   const registrosSemana = registros.filter((r) => {
@@ -290,6 +312,17 @@ export default function ProducaoPainelPage() {
           {/* FORMULÁRIO DE REGISTRO RÁPIDO */}
           <div className="bg-white rounded-2xl shadow-soft p-5 md:p-6 mb-10">
             <p className="font-display text-lg text-teal-900 mb-4">Registrar banho ou tosa</p>
+
+            {ultimoRegistro && (
+              <button
+                type="button"
+                onClick={repetirUltimo}
+                className="text-xs font-display text-teal-800 hover:text-clay-600 mb-4 -mt-2 text-left focus-ring rounded block"
+              >
+                ↻ Repetir último: {ultimoRegistro.servico_nome} — {formatarPreco(Number(ultimoRegistro.valor_servico))}
+              </button>
+            )}
+
             <form onSubmit={registrar} className="grid gap-4">
               <div className="block">
                 <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
@@ -407,6 +440,12 @@ export default function ProducaoPainelPage() {
               >
                 {salvando ? 'Registrando…' : 'Registrar'}
               </button>
+
+              {sucesso && (
+                <p className="text-sm text-moss-600 font-display text-center -mt-1">
+                  ✓ Registrado com sucesso!
+                </p>
+              )}
             </form>
           </div>
 
@@ -456,6 +495,13 @@ export default function ProducaoPainelPage() {
                       </div>
                       <button
                         type="button"
+                        onClick={() => setModalEditar(r)}
+                        className="text-xs font-display text-ink/40 hover:text-teal-800 px-1.5 focus-ring rounded shrink-0"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => excluir(r.id)}
                         aria-label="Excluir registro"
                         className="text-ink/30 hover:text-clay-600 text-xl leading-none px-1.5 focus-ring rounded shrink-0"
@@ -476,6 +522,18 @@ export default function ProducaoPainelPage() {
           onFechar={() => setModalPacote(false)}
           onSalvo={() => {
             setModalPacote(false);
+            carregarPacotesAtivos();
+          }}
+        />
+      )}
+
+      {modalEditar && (
+        <EditarRegistroModal
+          registro={modalEditar}
+          onFechar={() => setModalEditar(null)}
+          onSalvo={() => {
+            setModalEditar(null);
+            carregar();
             carregarPacotesAtivos();
           }}
         />
