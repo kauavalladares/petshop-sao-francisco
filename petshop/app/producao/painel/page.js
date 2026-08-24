@@ -57,6 +57,7 @@ export default function ProducaoPainelPage() {
   const [registros, setRegistros] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
+  const [limiteHistorico, setLimiteHistorico] = useState(50);
 
   const [pacotesAtivos, setPacotesAtivos] = useState([]);
 
@@ -75,7 +76,7 @@ export default function ProducaoPainelPage() {
     setCarregando(true);
     setErro(null);
     try {
-      const resp = await fetch('/api/producao/registros');
+      const resp = await fetch(`/api/producao/registros?limite=${limiteHistorico}`);
       if (resp.status === 401) {
         router.push('/producao');
         return;
@@ -91,7 +92,7 @@ export default function ProducaoPainelPage() {
     } finally {
       setCarregando(false);
     }
-  }, [router]);
+  }, [router, limiteHistorico]);
 
   const carregarPacotesAtivos = useCallback(async () => {
     try {
@@ -106,8 +107,11 @@ export default function ProducaoPainelPage() {
 
   useEffect(() => {
     carregar();
+  }, [carregar]);
+
+  useEffect(() => {
     carregarPacotesAtivos();
-  }, [carregar, carregarPacotesAtivos]);
+  }, [carregarPacotesAtivos]);
 
   function alterarServico(servicoId) {
     if (servicoId === 'outro') {
@@ -450,7 +454,21 @@ export default function ProducaoPainelPage() {
           </div>
 
           {/* HISTÓRICO */}
-          <p className="font-display text-lg text-teal-900 mb-3">Histórico</p>
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <p className="font-display text-lg text-teal-900">Histórico</p>
+            <label className="flex items-center gap-2 text-sm text-ink/60">
+              Mostrar
+              <select
+                value={limiteHistorico}
+                onChange={(e) => setLimiteHistorico(Number(e.target.value))}
+                className="rounded-lg border-2 border-cream-line focus:border-clay-500 outline-none px-2.5 py-1.5 bg-cream-soft focus-ring text-sm font-display text-teal-900"
+              >
+                <option value={10}>10</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </label>
+          </div>
 
           {carregando && <p className="text-ink/60">Carregando…</p>}
           {erro && <p className="text-clay-600">{erro}</p>}

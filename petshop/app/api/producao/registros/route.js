@@ -1,7 +1,17 @@
 import { NextResponse } from 'next/server';
 import { sql, garantirTabela } from '@/lib/db';
 import { calcularComissao } from '@/lib/comissao';
-import { ajustarUsoPacote } from '@/lib/pacotes';
+
+// Ajusta quantas sessões de um pacote já foram usadas (delta +1 ou -1) e
+// mantém o status do pacote em dia ('ativo' <-> 'finalizado').
+async function ajustarUsoPacote(pacoteId, delta) {
+  const rows = await sql`SELECT quantidade_total, quantidade_usada, status FROM pacotes WHERE id = ${pacoteId}`;
+  const pacote = rows[0];
+  if (!pacote || pacote.status === 'cancelado') return;
+  const novaUsada = Math.max(0, pacote.quantidade_usada + delta);
+  const novoStatus = novaUsada >= pacote.quantidade_total ? 'finalizado' : 'ativo';
+  await sql`UPDATE pacotes SET quantidade_usada = ${novaUsada}, status = ${novoStatus} WHERE id = ${pacoteId}`;
+}
 
 export async function GET(request) {
   try {
@@ -9,6 +19,9 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const inicio = searchParams.get('inicio');
     const fim = searchParams.get('fim');
+
+    const limiteParam = Number(searchParams.get('limite'));
+    const limite = [10, 50, 100].includes(limiteParam) ? limiteParam : 50;
 
     let rows;
     if (inicio && fim) {
@@ -21,7 +34,7 @@ export async function GET(request) {
       rows = await sql`
         SELECT * FROM producoes
         ORDER BY data DESC, criado_em DESC
-        LIMIT 500
+        LIMIT ${limite}
       `;
     }
 
