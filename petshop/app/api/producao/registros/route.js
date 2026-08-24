@@ -1,17 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sql, garantirTabela } from '@/lib/db';
 import { calcularComissao } from '@/lib/comissao';
-
-// Ajusta quantas sessões de um pacote já foram usadas (delta +1 ou -1) e
-// mantém o status do pacote em dia ('ativo' <-> 'finalizado').
-async function ajustarUsoPacote(pacoteId, delta) {
-  const rows = await sql`SELECT quantidade_total, quantidade_usada, status FROM pacotes WHERE id = ${pacoteId}`;
-  const pacote = rows[0];
-  if (!pacote || pacote.status === 'cancelado') return;
-  const novaUsada = Math.max(0, pacote.quantidade_usada + delta);
-  const novoStatus = novaUsada >= pacote.quantidade_total ? 'finalizado' : 'ativo';
-  await sql`UPDATE pacotes SET quantidade_usada = ${novaUsada}, status = ${novoStatus} WHERE id = ${pacoteId}`;
-}
+import { ajustarUsoPacote } from '@/lib/pacotes';
 
 export async function GET(request) {
   try {
