@@ -9,6 +9,8 @@ import PacoteRapidoModal from '@/components/producao/PacoteRapidoModal';
 import PacotesLista from '@/components/producao/PacotesLista';
 import EditarRegistroModal from '@/components/producao/EditarRegistroModal';
 
+const LIMITES_HISTORICO = [10, 25, 50, 100];
+
 function toISO(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -463,9 +465,11 @@ export default function ProducaoPainelPage() {
                 onChange={(e) => setLimiteHistorico(Number(e.target.value))}
                 className="rounded-lg border-2 border-cream-line focus:border-clay-500 outline-none px-2.5 py-1.5 bg-cream-soft focus-ring text-sm font-display text-teal-900"
               >
-                <option value={10}>10</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
+                {LIMITES_HISTORICO.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
               </select>
             </label>
           </div>

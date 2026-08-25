@@ -13,6 +13,8 @@ async function ajustarUsoPacote(pacoteId, delta) {
   await sql`UPDATE pacotes SET quantidade_usada = ${novaUsada}, status = ${novoStatus} WHERE id = ${pacoteId}`;
 }
 
+const LIMITES_PERMITIDOS = [10, 25, 50, 100];
+
 export async function GET(request) {
   try {
     await garantirTabela();
@@ -21,7 +23,7 @@ export async function GET(request) {
     const fim = searchParams.get('fim');
 
     const limiteParam = Number(searchParams.get('limite'));
-    const limite = [10, 50, 100].includes(limiteParam) ? limiteParam : 50;
+    const limite = LIMITES_PERMITIDOS.includes(limiteParam) ? limiteParam : 50;
 
     let rows;
     if (inicio && fim) {
