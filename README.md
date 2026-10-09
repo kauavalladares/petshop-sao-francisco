@@ -58,7 +58,6 @@ O schema do banco (`petshop/schema.sql`) é criado automaticamente na primeira r
 
 ## 📷 Demonstração
 
-> Adicione capturas de tela nas pastas indicadas abaixo.
 
 ### Página inicial
 ![Página Inicial](./images/home.png)
